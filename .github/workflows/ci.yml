@@ -1,0 +1,41 @@
+name: Examples CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: examples-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  manifest:
+    runs-on: ubuntu-24.04
+    container:
+      image: swift@sha256:bca121f6eb59fd80340d1296887b2698ed8f3eb9eca7d80c181f8af769dc7ee0
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - run: swift --version
+      - run: swift package dump-package > /dev/null
+      - name: Check source and attribution
+        run: |
+          test -f Sources/ResearchExplorerApp/App/ExplorerApp.swift
+          test -f Sources/ResearchExplorer/ExplorerMain.swift
+          test -f THIRD_PARTY_NOTICES.md
+          test -f Docs/Screenshots/RE-03/01-first-run-light.png
+  macos-27:
+    if: >-
+      vars.HAS_MACOS27_RUNNER == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS, macos-27]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - run: swift --version
+      - run: Scripts/test.sh
+      - run: swift build --product ResearchExplorerApp
