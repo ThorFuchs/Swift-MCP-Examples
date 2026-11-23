@@ -19,9 +19,13 @@ struct ActivityView: View {
     private var selected: ActivityEvent? { lifetime.activitySnapshot.events.first { $0.id == selectedID } }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Activity log").font(.largeTitle.bold())
-            Text("Local research (direct, not MCP), MCP tool-handler calls from any client (external, curl recipe or Explore MCP) and app-owned server lifecycle. Bounded, redacted projections: no arguments, results, headers or credentials.").foregroundStyle(.secondary)
-            HStack {
+            ExplorerScreenHeading(
+                eyebrow: "OBSERVABILITY",
+                title: "Activity",
+                summary: "A clear view of local research, eligible MCP handler calls and app-owned server lifecycle. Bounded and redacted: no arguments, results, headers or credentials."
+            )
+            ExplorerPanel {
+                HStack(spacing: ExplorerDesign.Space.md) {
                 Picker("Level", selection: $severity) {
                     Text("All levels").tag(EventSeverity?.none)
                     ForEach(EventSeverity.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
@@ -36,6 +40,7 @@ struct ActivityView: View {
                 }.frame(maxWidth: 190)
                 Spacer()
                 Toggle("Follow tail", isOn: $followTail).help("Display only. Collection and the server continue unchanged.")
+                }
             }
             if lifetime.activitySnapshot.events.isEmpty {
                 ContentUnavailableView("No activity yet", systemImage: "waveform.path", description: Text("Search an offline article or explicitly start this app's server."))
@@ -53,14 +58,24 @@ struct ActivityView: View {
                 }.frame(minHeight: 200)
             }
             Divider()
-            if let selected { EventDetailsView(event: selected) }
-            else if selectedID != nil { Text("The selected event has left retained history.").foregroundStyle(.secondary) }
-            else { Text("Select an event to inspect its redacted details.").foregroundStyle(.secondary) }
+            if let selected {
+                ExplorerPanel { EventDetailsView(event: selected) }
+            } else if selectedID != nil {
+                Text("The selected event has left retained history.").foregroundStyle(.secondary)
+            } else {
+                Text("Select an event to inspect its redacted details.").foregroundStyle(.secondary)
+            }
             HStack {
                 Text("\(lifetime.activitySnapshot.events.count) events retained · \(lifetime.activitySnapshot.discarded) discarded").monospacedDigit()
                 Spacer(); Text("Bounded projected metadata only")
-            }.font(.caption).foregroundStyle(.secondary)
-        }.padding(28)
+            }
+            .font(ExplorerDesign.Type.detail)
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: ExplorerDesign.Layout.contentMaxWidth, alignment: .leading)
+        .padding(ExplorerDesign.Space.xl)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .background(ExplorerDesign.Palette.canvas)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 TextField("Search activity", text: $filterText).frame(minWidth: 200, idealWidth: 320).focused($searchFocused).accessibilityLabel("Search retained activity")
@@ -77,8 +92,10 @@ struct EventDetailsView: View {
     let event: ActivityEvent
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Event details").font(.title2.bold())
-            Text(event.detail).font(.callout.monospaced()).textSelection(.enabled)
+            Text("Event details").font(ExplorerDesign.Type.section)
+            Text(event.detail)
+                .font(ExplorerDesign.Type.mono)
+                .textSelection(.enabled)
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }
 }
