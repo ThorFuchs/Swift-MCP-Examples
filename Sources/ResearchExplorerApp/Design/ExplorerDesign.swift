@@ -30,6 +30,9 @@ enum ExplorerDesign {
         static let sidebarIdealWidth: CGFloat = 242
         static let outlineWidth: CGFloat = 238
         static let evidenceWidth: CGFloat = 328
+        static let outlineBreakpoint: CGFloat = 760
+        static let evidenceBreakpoint: CGFloat = 1100
+        static let compactEvidenceWidth: CGFloat = 360
     }
 
     enum Palette {
@@ -46,6 +49,12 @@ enum ExplorerDesign {
         static let cautionWash = Color.orange.opacity(0.09)
     }
 
+    enum Reader {
+        static let minimumSize = 14.0
+        static let maximumSize = 26.0
+        static let defaultSize = 17.0
+    }
+
     enum Type {
         static let display: Font = .system(size: 36, weight: .semibold, design: .serif)
         static let pageTitle: Font = .system(size: 32, weight: .semibold, design: .serif)
@@ -57,7 +66,7 @@ enum ExplorerDesign {
         static let mono: Font = .system(size: 12, weight: .regular, design: .monospaced)
 
         static func article(size: Double) -> Font {
-            .system(size: CGFloat(min(26, max(14, size))), weight: .regular, design: .serif)
+            .system(size: CGFloat(min(Reader.maximumSize, max(Reader.minimumSize, size))), weight: .regular, design: .serif)
         }
     }
 }

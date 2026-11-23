@@ -25,7 +25,11 @@ struct ActivityView: View {
                 summary: "A clear view of local research, eligible MCP handler calls and app-owned server lifecycle. Bounded and redacted: no arguments, results, headers or credentials."
             )
             ExplorerPanel {
-                HStack(spacing: ExplorerDesign.Space.md) {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 180), spacing: ExplorerDesign.Space.md)],
+                    alignment: .leading,
+                    spacing: ExplorerDesign.Space.sm
+                ) {
                 Picker("Level", selection: $severity) {
                     Text("All levels").tag(EventSeverity?.none)
                     ForEach(EventSeverity.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
@@ -38,7 +42,6 @@ struct ActivityView: View {
                     Text("All origins").tag(EventOrigin?.none)
                     ForEach(EventOrigin.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
                 }.frame(maxWidth: 190)
-                Spacer()
                 Toggle("Follow tail", isOn: $followTail).help("Display only. Collection and the server continue unchanged.")
                 }
             }

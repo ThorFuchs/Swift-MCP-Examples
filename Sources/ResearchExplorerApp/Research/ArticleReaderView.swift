@@ -14,8 +14,8 @@ struct ArticleReaderView: View {
     @State private var width: CGFloat = 1200
     @State private var evidenceColumn = true
     @State private var evidencePopover = false
-    static let outlineColumnBreakpoint: CGFloat = 760
-    static let evidenceColumnBreakpoint: CGFloat = 1100
+    static let outlineColumnBreakpoint = ExplorerDesign.Layout.outlineBreakpoint
+    static let evidenceColumnBreakpoint = ExplorerDesign.Layout.evidenceBreakpoint
     var body: some View {
         let presentation = model.presentation
         let showOutline = width >= Self.outlineColumnBreakpoint
@@ -39,7 +39,8 @@ struct ArticleReaderView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .popover(isPresented: $evidencePopover, arrowEdge: .top) {
-            EvidencePane(model: model, presentation: model.presentation).frame(width: 360, height: 570)
+            EvidencePane(model: model, presentation: model.presentation)
+                .frame(width: ExplorerDesign.Layout.compactEvidenceWidth, height: 570)
         }
         .toolbar {
             ToolbarItemGroup {
@@ -118,7 +119,7 @@ struct ReadingPane: View {
     @Bindable var model: ResearchController
     let outline: Outline
     let presentation: ReaderPresentation
-    @AppStorage("readerSize") private var readerSize = 17.0
+    @AppStorage("readerSize") private var readerSize = ExplorerDesign.Reader.defaultSize
     private var bodyFont: Font { ExplorerDesign.Type.article(size: readerSize) }
     var body: some View {
         ScrollView {

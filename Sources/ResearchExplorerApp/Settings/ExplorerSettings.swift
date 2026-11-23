@@ -2,7 +2,7 @@
 import SwiftUI
 
 struct ExplorerSettings: View {
-    @AppStorage("readerSize") private var readerSize = 17.0
+    @AppStorage("readerSize") private var readerSize = ExplorerDesign.Reader.defaultSize
     @AppStorage("appearance") private var appearance = "system"
 
     var body: some View {
@@ -21,7 +21,7 @@ struct ExplorerSettings: View {
                     }
                 }
                 Section("Typography") {
-                    Slider(value: $readerSize, in: 14...26, step: 1) {
+                    Slider(value: $readerSize, in: ExplorerDesign.Reader.minimumSize...ExplorerDesign.Reader.maximumSize, step: 1) {
                         Text("Article text size")
                     }
                     LabeledContent("Preview size", value: "\(Int(readerSize)) pt")

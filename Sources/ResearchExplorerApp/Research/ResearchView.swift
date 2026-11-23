@@ -146,7 +146,7 @@ struct ResearchView: View {
     private func results(_ page: SearchPage) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: ExplorerDesign.Space.md) {
-                Text("Explore the collection")
+                Text(model.source == .offlineDemo ? "Explore the collection" : "Wikipedia results")
                     .font(ExplorerDesign.Type.pageTitle)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: ExplorerDesign.Space.sm)
