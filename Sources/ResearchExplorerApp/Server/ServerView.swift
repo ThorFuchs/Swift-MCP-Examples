@@ -10,15 +10,28 @@ struct ServerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Server overview").font(.largeTitle.bold())
-                Text("Research Explorer · MCP 2026-07-28 · \(lifetime.profile.rawValue)").foregroundStyle(.secondary)
-                Picker("Research source", selection: Binding(get: { lifetime.profile }, set: { lifetime.selectSource($0) })) {
-                    ForEach(SourceProfile.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.disabled(!lifetime.canSwitchSource)
-                Text("Source changes require a stopped, joined server and settled Research. No request is made at startup.").font(.caption).foregroundStyle(.secondary)
+                ExplorerScreenHeading(
+                    eyebrow: "DEVELOPER WORKSPACE",
+                    title: "Local MCP server",
+                    summary: "Research Explorer · MCP 2026-07-28 · \(lifetime.profile.rawValue)"
+                )
+                ExplorerPanel {
+                    VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) {
+                        Label("Research source", systemImage: "books.vertical")
+                            .font(ExplorerDesign.Type.panel)
+                        Picker("Research source", selection: Binding(get: { lifetime.profile }, set: { lifetime.selectSource($0) })) {
+                            ForEach(SourceProfile.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        .disabled(!lifetime.canSwitchSource)
+                        Text("Source changes require a stopped, joined server and settled Research. No request is made at startup.")
+                            .font(ExplorerDesign.Type.detail)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if let server = lifetime.server {
-                    GroupBox {
-                        HStack(alignment: .center) {
+                    ExplorerPanel {
+                        HStack(alignment: .center, spacing: ExplorerDesign.Space.md) {
                             VStack(alignment: .leading, spacing: 6) {
                                 Label(server.phase.rawValue, systemImage: server.phase == .running ? "checkmark.circle.fill" : server.phase == .failed ? "exclamationmark.triangle" : "circle").font(.title2.bold())
                                 Text(server.endpoint?.url ?? "HTTP · loopback only · starts explicitly").textSelection(.enabled).font(.callout.monospaced())
@@ -30,13 +43,15 @@ struct ServerView: View {
                                 }
                             }
                             Spacer()
-                            if server.canStart { Button("Start server", systemImage: "play.fill") { lifetime.startServer() }.buttonStyle(.borderedProminent) }
+                            if server.canStart { Button("Start server", systemImage: "play.fill") { lifetime.startServer() }.buttonStyle(.glassProminent) }
                             else { Button("Stop server", systemImage: "stop.fill") { lifetime.stopServer() }.disabled(!server.canStop) }
                             Button("Restart") { server.restart() }.disabled(server.phase != .running)
                             Button("Connection details", systemImage: "doc.on.doc") { showConnection = true }.disabled(server.endpoint == nil)
                         }.padding(12)
                     }
-                    Text("Local development access. Host is checked; browser Origins and supplied Authorization are rejected. Not a public or protected-resource endpoint.").font(.callout).foregroundStyle(.secondary)
+                    Label("Anonymous loopback development access only. Host is checked; browser Origins and supplied Authorization are rejected. Not a public or protected-resource endpoint.", systemImage: "lock.shield")
+                        .font(ExplorerDesign.Type.detail)
+                        .foregroundStyle(.secondary)
                     MCPJourneyView(lifetime: lifetime, journey: lifetime.journey, running: server.phase == .running)
                     summaries
                     RequestActivityChart(snapshot: lifetime.activitySnapshot)
@@ -54,27 +69,54 @@ struct ServerView: View {
                     }
                     Text("Only this app's catalogue handler invocations are observed, whichever client made them: an external client, a curl recipe or Explore MCP alike. Local Research calls the service directly and is listed separately in Activity. Pre-handler transport/schema rejections and connection counts are unavailable. No protocol sessions are inferred.").font(.caption).foregroundStyle(.secondary)
                 } else { ContentUnavailableView("Server unavailable", systemImage: "exclamationmark.triangle", description: Text(lifetime.startupProblem ?? "The selected SDK host could not be constructed.")) }
-            }.padding(28)
+            }
+            .frame(maxWidth: ExplorerDesign.Layout.contentMaxWidth, alignment: .leading)
+            .padding(ExplorerDesign.Space.xl)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
+        .background(ExplorerDesign.Palette.canvas)
         .sheet(isPresented: $showConnection) { connectionDetails }
     }
     private var summaries: some View {
-        let s = lifetime.activitySnapshot
-        return HStack(spacing: 24) {
-            metric("Active tool requests", s.metricsAvailable ? "\(s.active)" : "Unavailable", "arrow.up.right")
-            metric("Completed calls", s.metricsAvailable ? "\(s.completed)" : "Unavailable", "checkmark.circle")
-            metric("Failed calls", s.metricsAvailable ? "\(s.failed)" : "Unavailable", "exclamationmark.triangle")
-            metric("Recent median", s.medianMilliseconds.map { "\($0) ms" } ?? "No samples", "clock")
-        }.overlay(alignment: .bottomLeading) { if s.metricsPartial { Text("Partial observation").font(.caption).foregroundStyle(.secondary).offset(y: 16) } }
-    }
-    private func metric(_ title: String, _ value: String, _ icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) { Label(title, systemImage: icon).foregroundStyle(.secondary); Text(value).font(.title2.bold()).monospacedDigit() }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
+        let snapshot = lifetime.activitySnapshot
+        return VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 172), spacing: ExplorerDesign.Space.sm)],
+                spacing: ExplorerDesign.Space.sm
+            ) {
+                ExplorerMetricTile(
+                    title: "Active tool requests",
+                    value: snapshot.metricsAvailable ? "\(snapshot.active)" : "Unavailable",
+                    symbol: "arrow.up.right"
+                )
+                ExplorerMetricTile(
+                    title: "Completed calls",
+                    value: snapshot.metricsAvailable ? "\(snapshot.completed)" : "Unavailable",
+                    symbol: "checkmark.circle"
+                )
+                ExplorerMetricTile(
+                    title: "Failed calls",
+                    value: snapshot.metricsAvailable ? "\(snapshot.failed)" : "Unavailable",
+                    symbol: "exclamationmark.triangle"
+                )
+                ExplorerMetricTile(
+                    title: "Recent median",
+                    value: snapshot.medianMilliseconds.map { "\($0) ms" } ?? "No samples",
+                    symbol: "clock"
+                )
+            }
+            if snapshot.metricsPartial {
+                Text("Partial observation · catalogue handlers only")
+                    .font(ExplorerDesign.Type.detail)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
     private var connectionDetails: some View {
         let recipes = lifetime.server?.endpoint.map { ConnectionRecipe.recipes(for: $0, source: lifetime.profile) } ?? []
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Connection details").font(.title2.bold())
+                Text("Connection details").font(ExplorerDesign.Type.section)
                 Text(lifetime.server?.endpoint?.url ?? "Listener not running").font(.body.monospaced()).textSelection(.enabled)
                 Text("MCP 2026-07-28 over Streamable HTTP: one stateless POST per request, with MCP-Protocol-Version and Mcp-Method headers and the protocol version and client capabilities in params._meta. There is no initialize handshake, session, GET stream or replay. Anonymous loopback development access only; browser Origins and Authorization are rejected. This is not a protected resource server.")
                     .foregroundStyle(.secondary)
@@ -85,8 +127,12 @@ struct ServerView: View {
                             Spacer()
                             Button("Copy", systemImage: "doc.on.doc") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(recipe.curl, forType: .string) }
                         }
-                        Text(recipe.curl).font(.caption.monospaced()).textSelection(.enabled)
-                            .padding(8).frame(maxWidth: .infinity, alignment: .leading).background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 6))
+                        Text(recipe.curl)
+                            .font(ExplorerDesign.Type.mono)
+                            .textSelection(.enabled)
+                            .padding(ExplorerDesign.Space.sm)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(ExplorerDesign.Palette.control, in: RoundedRectangle(cornerRadius: ExplorerDesign.Radius.small))
                     }
                 }
                 Text("These exact requests are executed against a live host in this app's tests. A Swift client uses Client with HTTPClientTransport(endpoint:) from Swift-MCP-Server-HTTP; `research-explorer --mcp-client` is the tested stdio client. Each request reaches the same four tool handlers that Activity counts.")
@@ -117,7 +163,9 @@ struct MCPJourneyView: View {
                         ProgressView().controlSize(.small)
                     } else {
                         Button("Explore MCP", systemImage: "arrow.left.arrow.right") { lifetime.exploreMCP() }
-                            .disabled(!running).help(running ? "Runs one guided client journey." : "Start the server first; the journey never starts it.")
+                            .buttonStyle(.glassProminent)
+                            .disabled(!running)
+                            .help(running ? "Runs one guided client journey." : "Start the server first; the journey never starts it.")
                     }
                     Toggle("Record exchange details", isOn: Binding(get: { journey.inspectExchanges }, set: { journey.setInspectExchanges($0) }))
                         .disabled(journey.isRunning)
@@ -160,6 +208,9 @@ struct MCPJourneyView: View {
                     }
                 }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-        } label: { Label("Guided MCP journey", systemImage: "point.3.connected.trianglepath.dotted") }
+        } label: {
+            Label("Guided MCP journey", systemImage: "point.3.connected.trianglepath.dotted")
+                .font(ExplorerDesign.Type.panel)
+        }
     }
 }
