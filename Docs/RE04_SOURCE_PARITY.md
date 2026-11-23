@@ -37,9 +37,17 @@ Also imported `Docs/MCP_WALKTHROUGH.md` unchanged from the same Core commit.
 - Connection recipes use exact MCP 2026-07-28 method/metadata/headers. Their request model must be tested against a real local HTTP server.
 - Lifecycle tests must demonstrate cancellation/join, a clean stop/restart and source switching without residual exchange records.
 
-## Native test handoff (when CI is available again)
+## Native test handoff (independent of GitHub Actions)
 
-Run from a clean clone of this exact branch on **macOS 27, Xcode 27.2, Swift 6.4.2**. First record `git rev-parse HEAD`, `git status --porcelain`, `swift --version` and the resolved source/fixture dependency graph. Then run:
+A separate **RE-03 baseline** is now available: the earlier [C-00 PR #3 run #45249983754](https://github.com/ThorFuchs/Swift-MCP-Examples/actions/runs/45249983754) completed native macOS 27 `Scripts/test.sh` and the app build successfully on the Mac Studio. Its separate hosted manifest job failed without executing steps. This does **not** qualify the newly synchronized RE-04 code and was not triggered by this branch.
+
+Run from a clean clone of this exact branch on **macOS 27, Xcode 27.2, Swift 6.4.2**. First record `git rev-parse HEAD`, `git status --porcelain`, `swift --version` and the resolved source/fixture dependency graph. Then run the checked-in local qualification script (toolchain, source SHA, logs, nonempty focused suite receipts, unchanged dependency lock):
+
+```bash
+bash Scripts/qualify-re04-local.sh
+```
+
+Alternatively execute the three main commands manually:
 
 ```bash
 Scripts/test.sh
@@ -55,7 +63,7 @@ for dependent SDK validation. Preserve exact commit/toolchain and raw logs.
 
 The standalone [Examples main Actions run #45044360991](https://github.com/ThorFuchs/Swift-MCP-Examples/actions/runs/45044360991)
 passed a Linux **manifest-only** job; its macOS job was skipped. It is not
-native qualification. Run a macOS job **only after the billing issue is resolved**
+native qualification. Do not trigger GitHub Actions from this branch during the billing interruption. Run a macOS job **only after the billing issue is resolved**
 and an appropriate Examples runner is configured.
 
 ## Isolation and release policy
