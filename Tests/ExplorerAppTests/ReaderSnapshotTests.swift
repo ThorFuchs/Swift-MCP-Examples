@@ -16,7 +16,11 @@ import ExplorerPresentation
 /// draws itself is captured. These images are for human inspection, not pixel assertions.
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["RE_SNAPSHOT_DIR"] != nil, "Set RE_SNAPSHOT_DIR to render review screenshots"))
 @MainActor struct ReaderSnapshotTests {
-    private enum Content { case app(tour: Bool, query: String?), evidence(query: String, section: Int) }
+    private enum Content {
+        case app(tour: Bool, query: String?)
+        case workspace(Workspace)
+        case evidence(query: String, section: Int)
+    }
     private struct Shot { let name: String; let size: CGSize; let dark: Bool; let readerSize: Double; let content: Content }
 
     private func render(_ shot: Shot, into directory: URL) async throws {
@@ -31,6 +35,9 @@ import ExplorerPresentation
         case .app(let tour, let query):
             if tour { research.exploreOfflineCollection(); await research.waitUntilIdle() }
             if let query { research.query = query; research.search(); await research.waitUntilIdle() }
+            root = AnyView(ExplorerRootView(lifetime: app))
+        case .workspace(let destination):
+            app.destination = destination
             root = AnyView(ExplorerRootView(lifetime: app))
         case .evidence(let query, let section):
             research.query = query; research.search(); await research.waitUntilIdle()
@@ -78,6 +85,8 @@ import ExplorerPresentation
             Shot(name: "06-search-results-light", size: .init(width: 1280, height: 800), dark: false, readerSize: 17, content: .app(tour: false, query: "Riverglass")),
             Shot(name: "07-evidence-cited-light", size: .init(width: 340, height: 760), dark: false, readerSize: 17, content: .evidence(query: "Riverglass Observatory", section: 1)),
             Shot(name: "08-evidence-metadata-missing-dark", size: .init(width: 340, height: 640), dark: true, readerSize: 17, content: .evidence(query: "lantern", section: 0)),
+            Shot(name: "09-server-idle-light", size: .init(width: 1440, height: 900), dark: false, readerSize: 17, content: .workspace(.server)),
+            Shot(name: "10-activity-empty-dark", size: .init(width: 1440, height: 900), dark: true, readerSize: 17, content: .workspace(.activity)),
         ]
         for shot in shots { try await render(shot, into: directory) }
         UserDefaults.standard.removeObject(forKey: "readerSize")
