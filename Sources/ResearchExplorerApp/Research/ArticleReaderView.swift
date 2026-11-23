@@ -22,7 +22,7 @@ struct ArticleReaderView: View {
         let roomForEvidence = width >= Self.evidenceColumnBreakpoint
         HStack(spacing: 0) {
             if showOutline {
-                OutlinePane(model: model, outline: outline, rows: presentation.outline).frame(width: 230)
+                OutlinePane(model: model, outline: outline, rows: presentation.outline).frame(width: ExplorerDesign.Layout.outlineWidth)
                 Divider()
             }
             VStack(spacing: 0) {
@@ -34,12 +34,12 @@ struct ArticleReaderView: View {
             }.frame(maxWidth: .infinity)
             if roomForEvidence && evidenceColumn {
                 Divider()
-                EvidencePane(model: model, presentation: presentation).frame(width: 320)
+                EvidencePane(model: model, presentation: presentation).frame(width: ExplorerDesign.Layout.evidenceWidth)
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .popover(isPresented: $evidencePopover, arrowEdge: .top) {
-            EvidencePane(model: model, presentation: model.presentation).frame(width: 340, height: 560)
+            EvidencePane(model: model, presentation: model.presentation).frame(width: 360, height: 570)
         }
         .toolbar {
             ToolbarItemGroup {
@@ -78,7 +78,9 @@ struct ArticleReaderView: View {
                 .labelStyle(.iconOnly).disabled(!presentation.canReadNext)
             Button { evidencePopover = true } label: { Label("Evidence", systemImage: "sidebar.trailing") }
         }
-        .buttonStyle(.borderless).padding(.horizontal, 16).padding(.vertical, 8)
+        .buttonStyle(.borderless)
+        .padding(.horizontal, ExplorerDesign.Space.md)
+        .padding(.vertical, ExplorerDesign.Space.xs)
     }
 }
 
@@ -101,8 +103,8 @@ struct OutlinePane: View {
                 }
             } header: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(outline.provenance.title).font(.headline).lineLimit(2)
-                    Text("Revision \(outline.snapshot.revisionID) · \(rows.count) sections").font(.caption).foregroundStyle(.secondary)
+                    Text(outline.provenance.title).font(ExplorerDesign.Type.panel).lineLimit(2)
+                    Text("Revision \(outline.snapshot.revisionID) · \(rows.count) sections").font(ExplorerDesign.Type.detail).foregroundStyle(.secondary)
                 }.padding(.bottom, 4)
             }
         }
@@ -117,12 +119,18 @@ struct ReadingPane: View {
     let outline: Outline
     let presentation: ReaderPresentation
     @AppStorage("readerSize") private var readerSize = 17.0
-    private var bodyFont: Font { .system(size: min(26, max(13, readerSize)), design: .serif) }
+    private var bodyFont: Font { ExplorerDesign.Type.article(size: readerSize) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(outline.provenance.title).font(.largeTitle.bold()).textSelection(.enabled)
+                VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) {
+                    Text("THE ARTICLE")
+                        .font(ExplorerDesign.Type.eyebrow)
+                        .tracking(1.4)
+                        .foregroundStyle(ExplorerDesign.Palette.accent)
+                    Text(outline.provenance.title)
+                        .font(ExplorerDesign.Type.pageTitle)
+                        .textSelection(.enabled)
                         .accessibilityAddTraits(.isHeader)
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 14) { badges }
@@ -132,7 +140,7 @@ struct ReadingPane: View {
                 status
                 if let passage = model.passage, let part = model.selectedPart {
                     let heading = presentation.outline.first { $0.location == part }?.title
-                    if let heading { Text(heading).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader) }
+                    if let heading { Text(heading).font(ExplorerDesign.Type.section).accessibilityAddTraits(.isHeader) }
                     Text(passage.textAvailable ? (passage.text.isEmpty ? "This section contains no supplied text." : passage.text) : "Text was not supplied for this section.")
                         .font(bodyFont).lineSpacing(6).textSelection(.enabled)
                         .foregroundStyle(passage.textAvailable && !passage.text.isEmpty ? .primary : .secondary)
@@ -147,9 +155,12 @@ struct ReadingPane: View {
                 }
                 RevisionPanel(model: model, outline: outline)
             }
-            .frame(maxWidth: 720, alignment: .leading).padding(.horizontal, 36).padding(.vertical, 28)
+            .frame(maxWidth: ExplorerDesign.Layout.articleMaxWidth, alignment: .leading)
+            .padding(.horizontal, ExplorerDesign.Space.xl)
+            .padding(.vertical, ExplorerDesign.Space.xl)
             .frame(maxWidth: .infinity)
         }
+        .background(ExplorerDesign.Palette.paper)
     }
     @ViewBuilder private var badges: some View {
         SourceBadge(source: model.source)
@@ -195,6 +206,7 @@ struct EvidencePane: View {
             }
         }
         .formStyle(.grouped)
+        .background(ExplorerDesign.Palette.canvas)
     }
     @ViewBuilder private var references: some View {
         switch presentation.evidence {
