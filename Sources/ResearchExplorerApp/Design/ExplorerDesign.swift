@@ -164,7 +164,9 @@ struct ExplorerMetricTile: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 Text(value)
-                    .font(.system(size: 25, weight: .semibold, design: .rounded))
+                    .font(value == "Unavailable" || value == "No samples"
+                          ? .system(size: 16, weight: .semibold)
+                          : .system(size: 25, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.primary)
                     .minimumScaleFactor(0.8)
