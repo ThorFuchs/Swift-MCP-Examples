@@ -78,7 +78,7 @@ struct ArticleReaderView: View {
                 .labelStyle(.iconOnly).disabled(!presentation.canReadNext)
             Button { evidencePopover = true } label: { Label("Evidence", systemImage: "sidebar.trailing") }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.glass)
         .padding(.horizontal, ExplorerDesign.Space.md)
         .padding(.vertical, ExplorerDesign.Space.xs)
     }

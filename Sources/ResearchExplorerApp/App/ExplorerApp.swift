@@ -10,10 +10,10 @@ import ExplorerPresentation
         WindowGroup("Research Explorer", id: "explorer") {
             ExplorerRootView(lifetime: lifetime)
                 .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
-                .frame(minWidth: 1000, minHeight: 700)
+                .frame(minWidth: 820, minHeight: 620)
                 .onAppear { delegate.lifetime = lifetime }
         }
-        .defaultSize(width: 1280, height: 860)
+        .defaultSize(width: 1440, height: 900)
         .commands { ExplorerCommands(lifetime: lifetime) }
         Settings { ExplorerSettings() }
     }

@@ -31,8 +31,8 @@ struct ServerView: View {
                 }
                 if let server = lifetime.server {
                     ExplorerPanel {
-                        HStack(alignment: .center, spacing: ExplorerDesign.Space.md) {
-                            VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: ExplorerDesign.Space.md) {
+                            VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
                                 Label(server.phase.rawValue, systemImage: server.phase == .running ? "checkmark.circle.fill" : server.phase == .failed ? "exclamationmark.triangle" : "circle").font(.title2.bold())
                                 Text(server.endpoint?.url ?? "HTTP · loopback only · starts explicitly").textSelection(.enabled).font(.callout.monospaced())
                                 if let failure = server.failure {
@@ -42,12 +42,19 @@ struct ServerView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            Spacer()
-                            if server.canStart { Button("Start server", systemImage: "play.fill") { lifetime.startServer() }.buttonStyle(.glassProminent) }
-                            else { Button("Stop server", systemImage: "stop.fill") { lifetime.stopServer() }.disabled(!server.canStop) }
-                            Button("Restart") { server.restart() }.disabled(server.phase != .running)
-                            Button("Connection details", systemImage: "doc.on.doc") { showConnection = true }.disabled(server.endpoint == nil)
-                        }.padding(12)
+                            HStack(spacing: ExplorerDesign.Space.sm) {
+                                if server.canStart {
+                                    Button("Start server", systemImage: "play.fill") { lifetime.startServer() }
+                                        .buttonStyle(.glassProminent)
+                                } else {
+                                    Button("Stop server", systemImage: "stop.fill") { lifetime.stopServer() }
+                                        .disabled(!server.canStop)
+                                }
+                                Button("Restart") { server.restart() }.disabled(server.phase != .running)
+                                Button("Connection details", systemImage: "doc.on.doc") { showConnection = true }
+                                    .disabled(server.endpoint == nil)
+                            }
+                        }
                     }
                     Label("Anonymous loopback development access only. Host is checked; browser Origins and supplied Authorization are rejected. Not a public or protected-resource endpoint.", systemImage: "lock.shield")
                         .font(ExplorerDesign.Type.detail)
