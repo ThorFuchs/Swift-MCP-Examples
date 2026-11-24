@@ -1,6 +1,6 @@
 {
   "name": "read_article_section",
-  "description": "Read bounded plain text from an exact cached Wikipedia revision. Tables, media and mathematical rendering are omitted. Cache expiry requires an explicit new outline.",
+  "description": "Read bounded plain text from an exact cached Wikipedia revision. Tables, media and mathematical rendering are omitted. Cache expiry requires an explicit new outline. Includes a bounded optional sample of internal article titles from the selected section.",
   "inputSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -240,6 +240,28 @@
               },
               "textAvailable": {
                 "type": "boolean"
+              },
+              "relatedKnowledge": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "titles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 12
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "titles",
+                  "truncated"
+                ]
               }
             },
             "required": [

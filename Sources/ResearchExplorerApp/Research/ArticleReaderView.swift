@@ -192,6 +192,35 @@ struct EvidencePane: View {
             } footer: {
                 Label("Citation metadata is not independently verified.", systemImage: "exclamationmark.shield").font(.caption)
             }
+            if model.source == .wikipediaEnglish {
+                Section {
+                    if let related = model.passage?.relatedKnowledge {
+                        ForEach(related.titles, id: \.self) { title in
+                            Button {
+                                model.query = title
+                                model.search()
+                            } label: {
+                                Label(title, systemImage: "arrow.up.right")
+                            }
+                            .disabled(model.isBusy)
+                            .help("Search Wikipedia for this linked article title using the current route.")
+                        }
+                        if related.titles.isEmpty {
+                            Text("No supported internal article links retained for this section.").foregroundStyle(.secondary)
+                        }
+                        if related.truncated {
+                            Text("Additional eligible links omitted by the bounded sample.").foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Read a section to inspect its related article titles.").foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Related Knowledge")
+                } footer: {
+                    Text("Links from the selected section's own content. A click starts a new search; targets are not prefetched or independently verified.")
+                        .font(.caption)
+                }
+            }
             Section("Provenance") {
                 ForEach(presentation.provenance) { line in
                     LabeledContent(line.label) { Text(line.value).textSelection(.enabled).multilineTextAlignment(.trailing) }

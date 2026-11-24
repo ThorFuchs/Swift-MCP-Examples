@@ -19,6 +19,7 @@ public enum LiveSnapshotAdmission {
         }
         for s in [id.provider, id.project, id.pageID, id.revisionID, id.normalizerVersion, p.title, p.sourceURL, p.license, p.retrievedAt, p.modifiedAt ?? "", p.language ?? ""] { try charge(s, 2048) }
         var depths: [String: Int] = [:], associations = 0
+        var relatedTitles = 0, relatedBytes = 0
         for part in value.parts {
             try Task.checkCancellation()
             guard Normalizer.component(part.id), depths[part.id] == nil, (1...limits.depth).contains(part.depth),
@@ -28,6 +29,15 @@ public enum LiveSnapshotAdmission {
             depths[part.id] = part.depth; associations += part.citations.count
             try charge(part.id, 128); if let h = part.heading { try charge(h, 512) }; if let text = part.text { try charge(text, 4_194_304) }
             for ref in part.citations { guard Normalizer.component(ref) else { throw invalid() }; try charge(ref, 128) }
+            if let related = part.relatedKnowledge {
+                guard related.isAdmitted, related.titles.count <= RelatedKnowledge.maximumSnapshotTitles - relatedTitles else { throw invalid() }
+                relatedTitles += related.titles.count
+                for title in related.titles {
+                    guard title.utf8.count <= RelatedKnowledge.maximumSnapshotBytes - relatedBytes else { throw invalid() }
+                    relatedBytes += title.utf8.count
+                    try charge(title, RelatedKnowledge.maximumTitleBytes)
+                }
+            }
         }
         guard (value.references?.count ?? 0) <= 4096 else { throw invalid() }
         var ids = Set<String>()

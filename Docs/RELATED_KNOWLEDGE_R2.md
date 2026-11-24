@@ -1,0 +1,7 @@
+# R2 — Related Knowledge
+
+Extract only explicit Parsoid rel=mw:WikiLink anchors with supported ./article title targets in retained section content. Exclude external URLs, namespaces, red links, query strings, controls, traversal and self links; decode once and replace underscores with spaces. Titles are navigation hints, not verified identities or citations. Limits: 12 unique titles per part, 256 retained titles / 32 KiB title UTF-8 per snapshot, 256 bytes per title; truncation disclosed. Existing 4 MiB logical content admission still applies and charges title bytes. No additional upstream request on normalization, reading or displaying. Click issues an ordinary search through the chosen route; the user selects the returned candidate. No target auto-opening or crawling.
+
+The optional relatedKnowledge field is added to live read_article_section only; the existing four tool names, offline contract, text projection, source identity and text normalizer version stay unchanged. The metadata is part of retained NormalizedPart equality and checked at snapshot admission, response admission and SDK client boundary. A selected section returns its own link sample rather than the subtree's links. Optional fields preserve decoding of prior section responses. New live contract requires requalification; previously successful smoke test cannot qualify this change.
+
+Native gates: RelatedKnowledgeTests, LiveProviderTests, NormalizerParityTests, ExplorerMCP tests, LiveWikipediaSmokeTests and interactive Direct/Via MCP related-title search.

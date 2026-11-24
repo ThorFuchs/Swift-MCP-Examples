@@ -160,13 +160,16 @@ public struct NormalizedPart: Sendable, Equatable {
     public let heading: String?
     public let text: String?
     public let citations: [String]
-    public init(id: String, parentID: String?, depth: Int, heading: String?, text: String?, citations: [String]) {
+    /// Optional internal link metadata, not citation evidence.
+    public let relatedKnowledge: RelatedKnowledge?
+    public init(id: String, parentID: String?, depth: Int, heading: String?, text: String?, citations: [String], relatedKnowledge: RelatedKnowledge? = nil) {
         self.id = id
         self.parentID = parentID
         self.depth = depth
         self.heading = heading
         self.text = text
         self.citations = citations
+        self.relatedKnowledge = relatedKnowledge
     }
 }
 
@@ -294,7 +297,9 @@ public struct SectionPassage: Codable, Sendable {
     public let textAvailable: Bool
     public let truncated: Bool
     public let continuationSupported: Bool
-    public init(snapshot: SnapshotID, provenance: Provenance, selectedPartID: String, includedPartIDs: [String], text: String, textAvailable: Bool, truncated: Bool, continuationSupported: Bool) {
+    /// Bounded related-title metadata for the selected section only; nil if unavailable.
+    public let relatedKnowledge: RelatedKnowledge?
+    public init(snapshot: SnapshotID, provenance: Provenance, selectedPartID: String, includedPartIDs: [String], text: String, textAvailable: Bool, truncated: Bool, continuationSupported: Bool, relatedKnowledge: RelatedKnowledge? = nil) {
         self.snapshot = snapshot
         self.provenance = provenance
         self.selectedPartID = selectedPartID
@@ -303,6 +308,7 @@ public struct SectionPassage: Codable, Sendable {
         self.textAvailable = textAvailable
         self.truncated = truncated
         self.continuationSupported = continuationSupported
+        self.relatedKnowledge = relatedKnowledge
     }
 }
 

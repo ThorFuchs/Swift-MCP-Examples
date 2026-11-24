@@ -109,8 +109,14 @@ public actor MediaWikiNormalizer {
         }
         let ambiguous = Set(duplicates.compactMap { targets[$0] })
         references.removeAll(where: { ambiguous.contains($0.id) })
-        struct Part { let id: String; let parent: String?; let depth: Int; var heading: String?; var text = ""; var citations: [String] = [] }
+        struct Part {
+            let id: String; let parent: String?; let depth: Int
+            var heading: String?; var text = ""; var citations: [String] = []
+            var relatedTitles: [String] = []; var relatedTruncated = false
+        }
         var parts: [Part] = [], unknown: [String: String] = [:], textBytes = 0, associations = 0
+        var relatedCount = 0, relatedBytes = 0
+        let ownTitle = page.key.replacingOccurrences(of: "_", with: " ")
         // A synthetic container is used only if the supported DOM has no lead
         // section. Every actual section, including pseudo/negative IDs, receives
         // a stable ordinal within this revision and normalizer version.
@@ -156,6 +162,18 @@ public actor MediaWikiNormalizer {
                         }
                         continue
                     }
+                    // An explicit internal article link is metadata only; keep normal text traversal.
+                    // References, navigation boxes and omitted content were already skipped.
+                    if e.tagName == "a", !cls.contains("new"), try tokens(e, "rel").contains("mw:WikiLink"),
+                       let title = RelatedKnowledge.title(fromParsoidHref: try attr(e, "href")),
+                       title != ownTitle, !parts[i].relatedTitles.contains(title) {
+                        if parts[i].relatedTitles.count < RelatedKnowledge.maximumTitles,
+                           relatedCount < RelatedKnowledge.maximumSnapshotTitles,
+                           title.utf8.count <= RelatedKnowledge.maximumSnapshotBytes - relatedBytes {
+                            parts[i].relatedTitles.append(title)
+                            relatedCount += 1; relatedBytes += title.utf8.count
+                        } else { parts[i].relatedTruncated = true }
+                    }
                     if ["p", "li", "br", "div", "dl"].contains(e.tagName) {
                         guard textBytes < 4_194_304 else { throw LiveFailure.bodyLimit }; parts[i].text += "\n"; textBytes += 1
                     }
@@ -175,7 +193,8 @@ public actor MediaWikiNormalizer {
             language: "en", license: page.license.title + " · " + licenseURL, synthetic: false)
         let snapshot = Snapshot(provenance: provenance,
             parts: parts.map { .init(id: $0.id, parentID: $0.parent, depth: $0.depth, heading: $0.heading,
-                                    text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines), citations: $0.citations) },
+                                    text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines), citations: $0.citations,
+                                    relatedKnowledge: .init(titles: $0.relatedTitles, truncated: $0.relatedTruncated)) },
             references: targets.isEmpty && associations > 0 ? nil : references, tables: nil, tableCount: 0, contentBytes: 0)
         return (try LiveSnapshotAdmission.validate(snapshot, limits: limits),
                 .init(pageID: identity.pageID, revisionID: identity.revisionID, htmlVersion: version!, htmlSHA256: SHA256.hash(data: Data(page.html.utf8)).map { String(format: "%02x", $0) }.joined(), nodes: count, maximumDepth: maximumDepth))

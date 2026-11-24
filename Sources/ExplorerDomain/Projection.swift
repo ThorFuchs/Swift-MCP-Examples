@@ -43,7 +43,8 @@ public enum SnapshotProjection {
             if clipped.truncated { truncated = true; break }
         }
         return .init(snapshot: snapshot.provenance.identity, provenance: snapshot.provenance,
-            selectedPartID: part.partID, includedPartIDs: included, text: output, textAvailable: parts.contains(where: { $0.text != nil }), truncated: truncated, continuationSupported: false)
+            selectedPartID: part.partID, includedPartIDs: included, text: output, textAvailable: parts.contains(where: { $0.text != nil }), truncated: truncated, continuationSupported: false,
+            relatedKnowledge: parts.first?.relatedKnowledge)
     }
     public static func references(_ snapshot: Snapshot, part: PartLocation) throws -> SectionReferences {
         let parts = try subtree(snapshot, part: part)

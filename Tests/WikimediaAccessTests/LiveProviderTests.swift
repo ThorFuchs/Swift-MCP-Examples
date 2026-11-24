@@ -87,6 +87,24 @@ private func html(_ content: String, revision: Int = 22, version: String = "2.8.
         #expect(snapshot.provenance.sourceURL.contains("oldid=22"))
         #expect(evidence.htmlVersion == "2.8.0" && evidence.htmlSHA256.count == 64)
     }
+    @Test func relatedKnowledgeIsBoundedScopedAndDoesNotFetchTargets() async throws {
+        let links = (0..<16).map { "<a rel='mw:WikiLink' href='./Topic_\($0)'>topic</a>" }.joined()
+        let page = try pageWire(html: html("<section data-mw-section-id='0'><p>" + links
+            + "<a rel='mw:WikiLink' href='./Topic_0#section'>duplicate</a>"
+            + "<a rel='mw:WikiLink' href='./File:Image'>file</a>"
+            + "<a rel='mw:WikiLink' href='https://evil.example/wiki/Injected'>external</a>"
+            + "<a rel='mw:WikiLink' href='./Test'>self</a>"
+            + "<a href='./NotMarked'>ordinary anchor</a>"
+            + "</p><section data-mw-section-id='1'><p><a rel='mw:WikiLink' href='./Caf%C3%A9'>child</a></p></section></section>"))
+        let (snapshot, _) = try await MediaWikiNormalizer().normalize(page, retrievedAt: Date(), limits: ExplorerLimits())
+        let root = try #require(snapshot.parts.first?.relatedKnowledge)
+        #expect(root.titles == (0..<12).map { "Topic \($0)" } && root.truncated)
+        #expect(snapshot.parts[1].relatedKnowledge?.titles == ["Café"])
+        let passage = try SnapshotProjection.section(snapshot, part: .init(snapshot: snapshot.provenance.identity, partID: snapshot.parts[0].id), maximumBytes: 4096)
+        #expect(passage.relatedKnowledge == root)
+        #expect(passage.text.contains("child"))
+    }
+
     @Test func versionAndRevisionConflictsAreDenied() async throws {
         let normalizer = MediaWikiNormalizer()
         for raw in [html("<section data-mw-section-id='0'>x</section>", revision: 23), html("<section data-mw-section-id='0'>x</section>", version: "9.0.0")] {

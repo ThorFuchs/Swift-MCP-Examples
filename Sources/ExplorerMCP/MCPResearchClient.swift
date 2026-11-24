@@ -75,6 +75,9 @@ public actor MCPResearchClient {
         let passage = try await call("read_article_section", input, SectionPassage.self)
         guard passage.snapshot == input.snapshot, passage.provenance.identity == input.snapshot,
               passage.selectedPartID == input.part.partID else { throw MCPResearchFailure.identityMismatch }
+        if let related = passage.relatedKnowledge {
+            guard profile == .wikipediaEnglish, related.isAdmitted else { throw MCPResearchFailure.invalidResponse }
+        }
         return passage
     }
     /// Calls the reference tool and verifies snapshot provenance and association shape.

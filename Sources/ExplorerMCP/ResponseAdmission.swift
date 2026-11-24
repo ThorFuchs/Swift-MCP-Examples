@@ -147,7 +147,7 @@ extension Outline: ResponseShape {
 
 extension SectionPassage: ResponseShape {
     func bound(_ m: inout ResponseUpperBound) {
-        m.object(["snapshot", "provenance", "selectedPartID", "includedPartIDs", "text", "textAvailable", "truncated", "continuationSupported"])
+        m.object(["snapshot", "provenance", "selectedPartID", "includedPartIDs", "text", "textAvailable", "truncated", "continuationSupported"] + (relatedKnowledge == nil ? [] : ["relatedKnowledge"]))
         if !m.admitted { return }; snapshot.bound(&m)
         if !m.admitted { return }; provenance.bound(&m)
         if !m.admitted { return }; m.string(selectedPartID)
@@ -156,6 +156,12 @@ extension SectionPassage: ResponseShape {
         if !m.admitted { return }; m.add(5)
         if !m.admitted { return }; m.add(5)
         if !m.admitted { return }; m.add(5)
+        if let relatedKnowledge, m.admitted {
+            m.object(["titles", "truncated"])
+            m.array(relatedKnowledge.titles.count)
+            for title in relatedKnowledge.titles { guard m.admitted else { break }; m.string(title) }
+            m.add(5)
+        }
     }
 }
 
