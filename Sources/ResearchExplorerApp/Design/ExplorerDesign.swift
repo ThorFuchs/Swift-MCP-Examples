@@ -55,7 +55,7 @@ enum ExplorerDesign {
         static let defaultSize = 17.0
     }
 
-    enum Type {
+    enum Typography {
         static let display: Font = .system(size: 36, weight: .semibold, design: .serif)
         static let pageTitle: Font = .system(size: 32, weight: .semibold, design: .serif)
         static let section: Font = .system(size: 22, weight: .semibold, design: .serif)
@@ -99,15 +99,15 @@ struct ExplorerScreenHeading: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
             Text(eyebrow.uppercased())
-                .font(ExplorerDesign.Type.eyebrow)
+                .font(ExplorerDesign.Typography.eyebrow)
                 .tracking(1.5)
                 .foregroundStyle(ExplorerDesign.Palette.accent)
             Text(title)
-                .font(ExplorerDesign.Type.display)
+                .font(ExplorerDesign.Typography.display)
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
             Text(summary)
-                .font(ExplorerDesign.Type.body)
+                .font(ExplorerDesign.Typography.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -142,7 +142,7 @@ struct ExplorerPill: View {
 
     var body: some View {
         Label(title, systemImage: symbol)
-            .font(ExplorerDesign.Type.detail)
+            .font(ExplorerDesign.Typography.detail)
             .foregroundStyle(tone.foreground)
             .padding(.horizontal, ExplorerDesign.Space.sm)
             .padding(.vertical, ExplorerDesign.Space.xs)
@@ -160,7 +160,7 @@ struct ExplorerMetricTile: View {
         ExplorerPanel {
             VStack(alignment: .leading, spacing: ExplorerDesign.Space.md) {
                 Label(title, systemImage: symbol)
-                    .font(ExplorerDesign.Type.detail)
+                    .font(ExplorerDesign.Typography.detail)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 Text(value)

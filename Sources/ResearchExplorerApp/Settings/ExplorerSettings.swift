@@ -26,7 +26,7 @@ struct ExplorerSettings: View {
                     }
                     LabeledContent("Preview size", value: "\(Int(readerSize)) pt")
                     Text("The shape of a good question is the beginning of a discovery.")
-                        .font(ExplorerDesign.Type.article(size: readerSize))
+                        .font(ExplorerDesign.Typography.article(size: readerSize))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, ExplorerDesign.Space.sm)
                         .textSelection(.enabled)
@@ -34,7 +34,7 @@ struct ExplorerSettings: View {
                 Section("Sources & privacy") {
                     LabeledContent("Source", value: "Choose in Server while stopped")
                     Text("Live Wikipedia is an explicit choice. No server or network request starts automatically.")
-                        .font(ExplorerDesign.Type.detail)
+                        .font(ExplorerDesign.Typography.detail)
                         .foregroundStyle(.secondary)
                 }
             }

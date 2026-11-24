@@ -72,7 +72,7 @@ struct ActivityView: View {
                 Text("\(lifetime.activitySnapshot.events.count) events retained · \(lifetime.activitySnapshot.discarded) discarded").monospacedDigit()
                 Spacer(); Text("Bounded projected metadata only")
             }
-            .font(ExplorerDesign.Type.detail)
+            .font(ExplorerDesign.Typography.detail)
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: ExplorerDesign.Layout.contentMaxWidth, alignment: .leading)
@@ -95,9 +95,9 @@ struct EventDetailsView: View {
     let event: ActivityEvent
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Event details").font(ExplorerDesign.Type.section)
+            Text("Event details").font(ExplorerDesign.Typography.section)
             Text(event.detail)
-                .font(ExplorerDesign.Type.mono)
+                .font(ExplorerDesign.Typography.mono)
                 .textSelection(.enabled)
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }

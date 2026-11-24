@@ -104,8 +104,8 @@ struct OutlinePane: View {
                 }
             } header: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(outline.provenance.title).font(ExplorerDesign.Type.panel).lineLimit(2)
-                    Text("Revision \(outline.snapshot.revisionID) · \(rows.count) sections").font(ExplorerDesign.Type.detail).foregroundStyle(.secondary)
+                    Text(outline.provenance.title).font(ExplorerDesign.Typography.panel).lineLimit(2)
+                    Text("Revision \(outline.snapshot.revisionID) · \(rows.count) sections").font(ExplorerDesign.Typography.detail).foregroundStyle(.secondary)
                 }.padding(.bottom, 4)
             }
         }
@@ -120,17 +120,17 @@ struct ReadingPane: View {
     let outline: Outline
     let presentation: ReaderPresentation
     @AppStorage("readerSize") private var readerSize = ExplorerDesign.Reader.defaultSize
-    private var bodyFont: Font { ExplorerDesign.Type.article(size: readerSize) }
+    private var bodyFont: Font { ExplorerDesign.Typography.article(size: readerSize) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) {
                     Text("THE ARTICLE")
-                        .font(ExplorerDesign.Type.eyebrow)
+                        .font(ExplorerDesign.Typography.eyebrow)
                         .tracking(1.4)
                         .foregroundStyle(ExplorerDesign.Palette.accent)
                     Text(outline.provenance.title)
-                        .font(ExplorerDesign.Type.pageTitle)
+                        .font(ExplorerDesign.Typography.pageTitle)
                         .textSelection(.enabled)
                         .accessibilityAddTraits(.isHeader)
                     ViewThatFits(in: .horizontal) {
@@ -141,7 +141,7 @@ struct ReadingPane: View {
                 status
                 if let passage = model.passage, let part = model.selectedPart {
                     let heading = presentation.outline.first { $0.location == part }?.title
-                    if let heading { Text(heading).font(ExplorerDesign.Type.section).accessibilityAddTraits(.isHeader) }
+                    if let heading { Text(heading).font(ExplorerDesign.Typography.section).accessibilityAddTraits(.isHeader) }
                     Text(passage.textAvailable ? (passage.text.isEmpty ? "This section contains no supplied text." : passage.text) : "Text was not supplied for this section.")
                         .font(bodyFont).lineSpacing(6).textSelection(.enabled)
                         .foregroundStyle(passage.textAvailable && !passage.text.isEmpty ? .primary : .secondary)

@@ -18,13 +18,13 @@ struct ServerView: View {
                 ExplorerPanel {
                     VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) {
                         Label("Research source", systemImage: "books.vertical")
-                            .font(ExplorerDesign.Type.panel)
+                            .font(ExplorerDesign.Typography.panel)
                         Picker("Research source", selection: Binding(get: { lifetime.profile }, set: { lifetime.selectSource($0) })) {
                             ForEach(SourceProfile.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }
                         .disabled(!lifetime.canSwitchSource)
                         Text("Source changes require a stopped, joined server and settled Research. No request is made at startup.")
-                            .font(ExplorerDesign.Type.detail)
+                            .font(ExplorerDesign.Typography.detail)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -57,7 +57,7 @@ struct ServerView: View {
                         }
                     }
                     Label("Anonymous loopback development access only. Host is checked; browser Origins and supplied Authorization are rejected. Not a public or protected-resource endpoint.", systemImage: "lock.shield")
-                        .font(ExplorerDesign.Type.detail)
+                        .font(ExplorerDesign.Typography.detail)
                         .foregroundStyle(.secondary)
                     MCPJourneyView(lifetime: lifetime, journey: lifetime.journey, running: server.phase == .running)
                     summaries
@@ -114,7 +114,7 @@ struct ServerView: View {
             }
             if snapshot.metricsPartial {
                 Text("Partial observation · catalogue handlers only")
-                    .font(ExplorerDesign.Type.detail)
+                    .font(ExplorerDesign.Typography.detail)
                     .foregroundStyle(.secondary)
             }
         }
@@ -123,7 +123,7 @@ struct ServerView: View {
         let recipes = lifetime.server?.endpoint.map { ConnectionRecipe.recipes(for: $0, source: lifetime.profile) } ?? []
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Connection details").font(ExplorerDesign.Type.section)
+                Text("Connection details").font(ExplorerDesign.Typography.section)
                 Text(lifetime.server?.endpoint?.url ?? "Listener not running").font(.body.monospaced()).textSelection(.enabled)
                 Text("MCP 2026-07-28 over Streamable HTTP: one stateless POST per request, with MCP-Protocol-Version and Mcp-Method headers and the protocol version and client capabilities in params._meta. There is no initialize handshake, session, GET stream or replay. Anonymous loopback development access only; browser Origins and Authorization are rejected. This is not a protected resource server.")
                     .foregroundStyle(.secondary)
@@ -135,7 +135,7 @@ struct ServerView: View {
                             Button("Copy", systemImage: "doc.on.doc") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(recipe.curl, forType: .string) }
                         }
                         Text(recipe.curl)
-                            .font(ExplorerDesign.Type.mono)
+                            .font(ExplorerDesign.Typography.mono)
                             .textSelection(.enabled)
                             .padding(ExplorerDesign.Space.sm)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -217,7 +217,7 @@ struct MCPJourneyView: View {
             }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
         } label: {
             Label("Guided MCP journey", systemImage: "point.3.connected.trianglepath.dotted")
-                .font(ExplorerDesign.Type.panel)
+                .font(ExplorerDesign.Typography.panel)
         }
     }
 }

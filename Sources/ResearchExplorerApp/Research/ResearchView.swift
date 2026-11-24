@@ -14,7 +14,7 @@ struct ResearchView: View {
                 ExplorerPanel {
                     VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) {
                         Label(problem.message, systemImage: "exclamationmark.triangle")
-                            .font(ExplorerDesign.Type.panel)
+                            .font(ExplorerDesign.Typography.panel)
                         Text(problem.recovery)
                             .foregroundStyle(.secondary)
                         if model.outline != nil {
@@ -105,7 +105,7 @@ struct ResearchView: View {
                 Spacer(minLength: ExplorerDesign.Space.xl)
                 ExplorerPill(title: "Fictional · Offline demo", symbol: "externaldrive", tone: .accent)
                 Text("A place to follow\nyour curiosity.")
-                    .font(ExplorerDesign.Type.display)
+                    .font(ExplorerDesign.Typography.display)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 Text("Explore five fictional articles about an observatory that never existed. Read the story, follow its references, and see exactly which revision each passage came from.")
@@ -126,9 +126,9 @@ struct ResearchView: View {
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
                             Text("Read first. Inspect when curious.")
-                                .font(ExplorerDesign.Type.section)
+                                .font(ExplorerDesign.Typography.section)
                             Text("The collection works entirely on this Mac. Starting the app makes no network request and opens no server. If you want to inspect real MCP traffic, start the local host explicitly in Server.")
-                                .font(ExplorerDesign.Type.body)
+                                .font(ExplorerDesign.Typography.body)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -147,7 +147,7 @@ struct ResearchView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: ExplorerDesign.Space.md) {
                 Text(model.source == .offlineDemo ? "Explore the collection" : "Wikipedia results")
-                    .font(ExplorerDesign.Type.pageTitle)
+                    .font(ExplorerDesign.Typography.pageTitle)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: ExplorerDesign.Space.sm)
                 SourceBadge(source: model.source)
@@ -160,10 +160,10 @@ struct ResearchView: View {
                     HStack(alignment: .center, spacing: ExplorerDesign.Space.md) {
                         VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
                             Text(candidate.title)
-                                .font(ExplorerDesign.Type.section)
+                                .font(ExplorerDesign.Typography.section)
                             if let description = candidate.description {
                                 Text(description)
-                                    .font(ExplorerDesign.Type.body)
+                                    .font(ExplorerDesign.Typography.body)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(3)
                             }
@@ -185,7 +185,7 @@ struct ResearchView: View {
                 Text(model.source == .offlineDemo
                      ? "More candidates exist. Refine the query."
                      : "Showing up to 10 results. Refine your query; total matches are unknown.")
-                    .font(ExplorerDesign.Type.detail)
+                    .font(ExplorerDesign.Typography.detail)
                     .foregroundStyle(.secondary)
                     .padding(ExplorerDesign.Space.md)
             }

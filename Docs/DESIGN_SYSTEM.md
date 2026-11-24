@@ -51,7 +51,7 @@ source of app-level visual tokens and shared primitives.
 | `Radius` | 10 / 18 / 24 pt | Opaque paper/tonal content containers |
 | `Layout` | 740 pt reading measure, 1,100 pt content width, 242 pt sidebar, 238/328 pt auxiliary columns | Adaptive editorial composition |
 | `Palette` | macOS semantic `NSColor` + system `Color.accentColor` | Automatic light/dark appearance, genuine system tint |
-| `Type` | Serif display/article headings; UI system sans for controls; monospaced technical details | Clear editorial/technical hierarchy |
+| `Typography` | Serif display/article headings; UI system sans for controls; monospaced technical details | Clear editorial/technical hierarchy |
 | `ExplorerPanel` | Opaque paper + semantic hairline | Legible app content, *not* Liquid Glass |
 | `ExplorerScreenHeading`, `ExplorerPill`, `ExplorerMetricTile` | Reusable native SwiftUI pieces | Research, Server, Activity, Settings |
 

@@ -18,7 +18,7 @@ struct ExplorerRootView: View {
                     }
                 } header: {
                     Text("Workspaces")
-                        .font(ExplorerDesign.Type.eyebrow)
+                        .font(ExplorerDesign.Typography.eyebrow)
                         .tracking(1.1)
                 }
             }
@@ -68,7 +68,7 @@ struct ExplorerRootView: View {
                     .foregroundStyle(ExplorerDesign.Palette.accent)
                     .accessibilityHidden(true)
                 Text("MCP 2026-07-28")
-                    .font(ExplorerDesign.Type.detail)
+                    .font(ExplorerDesign.Typography.detail)
                     .foregroundStyle(.secondary)
             }
             if let server = lifetime.server {

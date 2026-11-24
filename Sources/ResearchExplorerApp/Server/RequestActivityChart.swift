@@ -8,9 +8,9 @@ struct RequestActivityChart: View {
     var body: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Request activity").font(ExplorerDesign.Type.section)
+                Text("Request activity").font(ExplorerDesign.Typography.section)
                 Text("Completed eligible MCP tool calls per 5-second bucket · last 5 minutes")
-                    .font(ExplorerDesign.Type.body)
+                    .font(ExplorerDesign.Typography.body)
                     .foregroundStyle(.secondary)
                 if snapshot.metricsAvailable {
                     Chart(snapshot.buckets) { bucket in
