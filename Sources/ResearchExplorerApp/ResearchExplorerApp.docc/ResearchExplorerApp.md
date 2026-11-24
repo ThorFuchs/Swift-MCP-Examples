@@ -20,6 +20,7 @@ explicitly.
 
 - <doc:AppArchitecture>
 - <doc:MachineRoomGuide>
+- <doc:UnifiedResearch>
 - ``AppLifetime``
 - ``ExplorerRootView``
 

@@ -29,6 +29,7 @@ which provider, project and normalizer identities are admitted.
 - ``SearchPage``
 - ``Outline``
 - ``SectionPassage``
+- ``RelatedKnowledge``
 - ``SectionReferences``
 
 ### Admission and limits

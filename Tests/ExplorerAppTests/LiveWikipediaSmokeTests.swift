@@ -172,4 +172,77 @@ import ExplorerPresentation
         }
         print("LIVE_WIKI MCP PASS joined=true")
     }
+
+    /// R1–R3: user-selected live research through the actual interactive MCP
+    /// route, one related-title search, then export the previously pinned evidence.
+    @Test func interactiveLiveResearchCollectsEvidence() async throws {
+        try await withLiveApp { app in
+            print("LIVE_WIKI interactive stage=host_start")
+            app.startServer()
+            let deadline = ContinuousClock.now.advanced(by: .seconds(120))
+            while app.server?.phase != .running {
+                try #require(ContinuousClock.now < deadline && app.server?.phase != .failed)
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            app.selectResearchMode(.mcp)
+            await app.waitUntilPrepared()
+            try #require(app.researchMode == .mcp && app.researchRouteReady)
+            let reader = try #require(app.research)
+            reader.query = self.query
+            reader.search(); await reader.waitUntilIdle()
+            if let problem = reader.problem { print("LIVE_WIKI interactive search_problem=\(problem.code.rawValue)") }
+            let candidate = try #require(reader.page?.candidates.first {
+                $0.title.caseInsensitiveCompare(self.query) == .orderedSame
+            })
+            reader.open(candidate); await reader.waitUntilIdle()
+            if let problem = reader.problem { print("LIVE_WIKI interactive outline_problem=\(problem.code.rawValue)") }
+            let outline = try #require(reader.outline)
+            try self.checkOutline(outline, candidatePage: candidate.pageID)
+            let part = try #require(outline.sections.first?.location)
+            reader.read(part); await reader.waitUntilIdle()
+            if let problem = reader.problem { print("LIVE_WIKI interactive section_problem=\(problem.code.rawValue)") }
+            try #require(reader.phase == .section && reader.problem == nil && reader.referenceProblem == nil)
+            let passage = try #require(reader.passage)
+            let refs = try #require(reader.citations)
+            try self.checkPassage(passage, outline: outline, maximumBytes: 32768)
+            try self.checkReferences(refs, outline: outline)
+            let related = try #require(passage.relatedKnowledge)
+            try #require(related.isAdmitted)
+            let title = try #require(related.titles.first, "The selected live article must contain a retained eligible related title")
+            let first = await app.activity.snapshot()
+            try #require(first.completed == 4 && first.failed == 0 && !first.metricsPartial)
+            try #require(!first.events.contains { $0.origin == .localResearch })
+            app.collectEvidence()
+            let evidence = try #require(app.collection.entries.first)
+            try #require(evidence.location == part && evidence.route == .mcp)
+            app.collectEvidence()
+            try #require(app.collection.entries.count == 1)
+            app.updateEvidenceNote("Research qualification note", id: evidence.id)
+            // A related link is an explicit search hint, not a direct arbitrary URL fetch.
+            reader.query = title
+            reader.search(); await reader.waitUntilIdle()
+            if let problem = reader.problem { print("LIVE_WIKI interactive related_problem=\(problem.code.rawValue)") }
+            try #require(reader.problem == nil && reader.page?.provider == "mediawiki-rest")
+            try #require(reader.page?.query == title)
+            let next = await app.activity.snapshot()
+            try #require(next.completed == 5 && next.failed == 0 && !next.metricsPartial)
+            app.selectResearchMode(.direct); await app.waitUntilPrepared()
+            try #require(app.researchMode == .direct && app.collection.entries.count == 1)
+            try #require(app.collection.entries.first?.location == part)
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let writer = ActivityExportWriter()
+            for format in ResearchCollection.Format.allCases {
+                let url = directory.appendingPathComponent("evidence." + format.fileExtension)
+                try await writer.writeCollection(app.collection, format: format, to: url)
+                let exported = try Data(contentsOf: url)
+                try #require(!exported.isEmpty && exported.count <= ResearchCollection.maximumExportBytes)
+                let content = String(decoding: exported, as: UTF8.self)
+                try #require(content.contains(outline.snapshot.revisionID) && content.contains("Research qualification note"))
+            }
+            print("LIVE_WIKI interactive verified revision=\(outline.snapshot.revisionID) related_titles=\(related.titles.count) terminal_handlers=\(next.completed) collection_entries=\(app.collection.entries.count) formats=2")
+        }
+        print("LIVE_WIKI INTERACTIVE PASS joined=true")
+    }
 }

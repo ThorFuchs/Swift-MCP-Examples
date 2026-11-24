@@ -19,6 +19,10 @@ network trace from either.
 
 - ``ServerController``
 - ``ResearchController``
+- ``RunBoundResearchClient``
+- ``ResearchExecutionMode``
+- ``ResearchCollection``
+- ``ResearchEvidence``
 - ``MCPJourneyController``
 
 ### Observed server activity
