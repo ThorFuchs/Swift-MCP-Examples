@@ -32,14 +32,22 @@ import ExplorerPresentation
         let app = try app()
         app.prepare(); await app.waitUntilPrepared()
         app.startServer(); try await waitPhase(app, .running)
+        let firstRun = try #require(app.server?.runID)
         // A full inspected run against the real host.
         app.journey.setInspectExchanges(true)
         app.exploreMCP(); await app.journey.waitUntilFinished()
         #expect(app.journey.phase == .completed && app.journey.exchanges.count == 6)
+        #expect(app.journeyOwnerRunID == firstRun)
+        let firstVisualID = app.journeyVisualID
         // Source switching is refused while the server runs, and while a journey runs.
         #expect(!app.canSwitchSource)
         // Stop during a run: the journey is cancelled first and ends; nothing keeps running.
         app.exploreMCP(); #expect(app.journey.isRunning)
+        let secondVisualID = app.journeyVisualID
+        #expect(secondVisualID != firstVisualID && app.journeyOwnerRunID == firstRun)
+        // A duplicate request during an owned journey must not replace its presentation identity.
+        app.exploreMCP()
+        #expect(app.journeyVisualID == secondVisualID)
         app.stopServer()
         await app.journey.waitUntilFinished()
         #expect(!app.journey.isRunning && [.cancelled, .failed, .completed].contains(app.journey.phase))
@@ -49,14 +57,24 @@ import ExplorerPresentation
         app.startServer()
         #expect(app.journey.steps.isEmpty && app.journey.exchanges.isEmpty && app.journey.phase == .idle)
         try await waitPhase(app, .running)
+        let nextRun = try #require(app.server?.runID)
+        #expect(nextRun != firstRun)
         app.exploreMCP(); await app.journey.waitUntilFinished()
         #expect(!app.journey.exchanges.isEmpty)
+        #expect(app.journeyOwnerRunID == nextRun && app.journeyVisualID != secondVisualID)
         app.stopServer(); await app.server?.waitUntilRunJoined(); await app.server?.awaitTransition(); try await waitPhase(app, .stopped)
         // Switching source joins and discards everything of the old source's journey.
         #expect(app.canSwitchSource)
         app.selectSource(.wikipediaEnglish); await app.waitUntilPrepared()
         #expect(app.profile == .wikipediaEnglish && app.server?.phase == .stopped)
         #expect(!app.journey.isRunning && app.journey.exchanges.isEmpty && app.journey.steps.isEmpty && app.journey.outline == nil)
+        let presentation = MachineRoomJourneyProjection(
+            currentRunID: app.server?.runID, journeyRunID: app.journeyOwnerRunID,
+            phase: app.journey.phase, steps: app.journey.steps,
+            inspectionEnabled: app.journey.inspectExchanges, records: app.journey.exchanges,
+            dropped: app.journey.droppedExchanges
+        )
+        #expect(!presentation.isCurrent && presentation.exchanges.isEmpty)
         #expect(await app.quit(waitMilliseconds: 10_000))
     }
 }

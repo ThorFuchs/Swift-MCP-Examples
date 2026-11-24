@@ -72,6 +72,12 @@ struct JourneyExchangeCharts: View {
 
     private var chartHeight: CGFloat { CGFloat(max(170, exchanges.count * 34)) }
 
+    private var largestBytes: Double {
+        let sent = exchanges.compactMap(\.requestBytes).max() ?? 0
+        let received = exchanges.compactMap(\.responseBytes).max() ?? 0
+        return Double(max(1, max(sent, received)))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: ExplorerDesign.Space.md) {
             ExplorerPanel {
@@ -226,7 +232,7 @@ struct JourneyExchangeCharts: View {
                         }
                     }
                     .chartYScale(domain: exchanges.reversed().map { key($0) })
-                    .chartXScale(domain: 0.0...max(1.0, Double(exchanges.flatMap { [$0.requestBytes, $0.responseBytes].compactMap { $0 } }.max() ?? 0)))
+                    .chartXScale(domain: 0.0...largestBytes)
                     .chartYSelection(value: selection)
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
                     .chartXAxisLabel("B")
