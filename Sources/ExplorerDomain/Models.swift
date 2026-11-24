@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 
+/// An owned, structured failure with an application error code, public message and recovery guidance.
 public struct ExplorerProblem: Error, Codable, Sendable, Equatable {
     public enum Code: String, Codable, Sendable {
         case invalidArguments = "invalid_arguments", projectNotAllowed = "project_not_allowed"
@@ -20,6 +21,7 @@ public struct ExplorerProblem: Error, Codable, Sendable, Equatable {
     }
 }
 
+/// Finite bounds on normalization, projection and snapshot retention. Invalid configurations are rejected during initialization.
 public struct ExplorerLimits: Sendable {
     public let depth, parts, sectionTextBytes, responseBytes, cacheEntries, cacheContentBytes: Int
     public let snapshotTTL: TimeInterval
@@ -39,6 +41,7 @@ public struct ExplorerLimits: Sendable {
 }
 
 // This is the owned wre-fixture-1 format, NEVER a Wikimedia wire decoder.
+/// The owned fictional fixture format; not a decoder for Wikimedia wire responses.
 public struct ArticleSeed: Codable, Sendable {
     public let fixtureKind, formatVersion, project, pageID, revisionID, title, sourceURL, normalizerVersion, license: String
     public let parts: [PartSeed]
@@ -52,18 +55,21 @@ public struct ArticleSeed: Codable, Sendable {
         case modifiedAt = "modified_at"
     }
 }
+/// Recursive section input in the owned fixture format.
 public struct PartSeed: Codable, Sendable {
     public let id: String
     public let heading, text, kind: String?
     public let citations: [String]?
     public let parts: [PartSeed]?
 }
+/// Source-supplied reference metadata, including whether the entry is synthetic.
 public struct ReferenceSeed: Codable, Sendable, Equatable {
     public let id, title: String
     public let url: String?
     public let synthetic: Bool
     public init(id: String, title: String, url: String?, synthetic: Bool) { self.id = id; self.title = title; self.url = url; self.synthetic = synthetic }
 }
+/// Bounded fixture table data containing text or integer cells.
 public struct TableSeed: Codable, Sendable, Equatable {
     public let id, caption: String
     public let columns: [String]
@@ -82,6 +88,7 @@ public struct TableSeed: Codable, Sendable, Equatable {
     }
 }
 
+/// Complete normalized revision identity: provider, project, page, revision and normalizer version.
 public struct SnapshotID: Codable, Sendable, Hashable {
     public let provider: String
     public let project: String
@@ -97,6 +104,7 @@ public struct SnapshotID: Codable, Sendable, Hashable {
     }
 }
 
+/// A part identifier bound to its exact snapshot identity.
 public struct PartLocation: Codable, Sendable, Hashable {
     public let snapshot: SnapshotID
     public let partID: String
@@ -106,6 +114,7 @@ public struct PartLocation: Codable, Sendable, Hashable {
     }
 }
 
+/// A search result offered by the selected provider; not yet a pinned revision.
 public struct Candidate: Codable, Sendable, Equatable {
     public let id: String
     public let project: String
@@ -121,6 +130,7 @@ public struct Candidate: Codable, Sendable, Equatable {
     }
 }
 
+/// Source, retrieval, revision and license metadata for a normalized snapshot.
 public struct Provenance: Codable, Sendable, Equatable {
     public let identity: SnapshotID
     public let title: String
@@ -142,6 +152,7 @@ public struct Provenance: Codable, Sendable, Equatable {
     }
 }
 
+/// One normalized part with parent/depth, optional content and citation identifiers.
 public struct NormalizedPart: Sendable, Equatable {
     public let id: String
     public let parentID: String?
@@ -159,6 +170,7 @@ public struct NormalizedPart: Sendable, Equatable {
     }
 }
 
+/// An admitted normalized revision and its bounded content and reference metadata.
 public struct Snapshot: Sendable {
     public let provenance: Provenance
     public let parts: [NormalizedPart]
@@ -176,6 +188,7 @@ public struct Snapshot: Sendable {
     }
 }
 
+/// Input to bounded article search within one selected project.
 public struct SearchInput: Codable, Sendable {
     public let query: String
     public let project: String
@@ -187,6 +200,7 @@ public struct SearchInput: Codable, Sendable {
     }
 }
 
+/// Resolves a provider-issued candidate into a revision-bound outline.
 public struct OutlineInput: Codable, Sendable {
     public let project: String
     public let candidateID: String
@@ -196,6 +210,7 @@ public struct OutlineInput: Codable, Sendable {
     }
 }
 
+/// Requests a bounded passage from a part of an exact cached snapshot.
 public struct SectionInput: Codable, Sendable {
     public let snapshot: SnapshotID
     public let part: PartLocation
@@ -207,6 +222,7 @@ public struct SectionInput: Codable, Sendable {
     }
 }
 
+/// Requests citation associations and reference metadata for an exact snapshot part.
 public struct ReferencesInput: Codable, Sendable {
     public let snapshot: SnapshotID
     public let part: PartLocation
@@ -216,6 +232,7 @@ public struct ReferencesInput: Codable, Sendable {
     }
 }
 
+/// A bounded candidate page, including the original admitted query and truncation flag.
 public struct SearchPage: Codable, Sendable {
     public let candidates: [Candidate]
     public let truncated: Bool
@@ -229,6 +246,7 @@ public struct SearchPage: Codable, Sendable {
     }
 }
 
+/// A hierarchy entry with a revision-bound location and optional heading.
 public struct OutlineSection: Codable, Sendable {
     public let location: PartLocation
     public let parentPartID: String?
@@ -242,6 +260,7 @@ public struct OutlineSection: Codable, Sendable {
     }
 }
 
+/// A bounded introduction and section hierarchy for one pinned revision.
 public struct Outline: Codable, Sendable {
     public let snapshot: SnapshotID
     public let provenance: Provenance
@@ -265,6 +284,7 @@ public struct Outline: Codable, Sendable {
     }
 }
 
+/// Projected plain-text content with explicit availability, truncation and provenance.
 public struct SectionPassage: Codable, Sendable {
     public let snapshot: SnapshotID
     public let provenance: Provenance
@@ -286,6 +306,7 @@ public struct SectionPassage: Codable, Sendable {
     }
 }
 
+/// A citation identifier and its source part, with explicit resolution status.
 public struct CitationAssociation: Codable, Sendable, Equatable {
     public let partID: String
     public let referenceID: String
@@ -297,6 +318,7 @@ public struct CitationAssociation: Codable, Sendable, Equatable {
     }
 }
 
+/// Projected reference metadata, not a verification of the cited source.
 public struct ReferenceEntry: Codable, Sendable {
     public let id: String
     public let title: String
@@ -310,6 +332,7 @@ public struct ReferenceEntry: Codable, Sendable {
     }
 }
 
+/// Reference entries, citation associations and unresolved identifiers for one section.
 public struct SectionReferences: Codable, Sendable {
     public let snapshot: SnapshotID
     public let provenance: Provenance

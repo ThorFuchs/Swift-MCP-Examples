@@ -6,12 +6,16 @@ import MCPServer
 import ExplorerDomain
 import WikimediaAccess
 
+/// Observes an eligible catalogue tool operation without changing its asynchronous ownership.
 public protocol ExplorerToolObserver: Sendable {
     func withToolCall(_ name: String, operation: @escaping @Sendable () async throws -> JSON) async throws -> JSON
 }
 
+/// Registers the four public research tools using the SDK, structured output and bounded response admission.
 public enum ExplorerTools {
+    /// Fixed tool catalogue shared by the research server and client.
     public static let names = ["search_articles", "get_article_outline", "read_article_section", "get_section_references"]
+    /// Builds the four-tool catalogue for the given research service and optional observation adapter.
     public static func catalog(service: ExplorerService, responseBytes: Int = 131_072, observer: (any ExplorerToolObserver)? = nil) throws -> ServerCatalog {
         guard (4096...131_072).contains(responseBytes) else { throw CoreFailure.invalidPolicy }
         return try ServerCatalog(tools: [

@@ -55,12 +55,14 @@ public actor MCPResearchClient {
         return (server, tools.filter { Self.toolNames.contains($0.name) })
     }
 
+    /// Calls the research search tool after preparation and verifies provider/project identity.
     public func search(_ input: SearchInput) async throws -> SearchPage {
         let page = try await call("search_articles", input, SearchPage.self)
         guard page.provider == profile.provider, page.candidates.count <= (input.limit ?? 10),
               page.candidates.allSatisfy({ $0.project == input.project }) else { throw MCPResearchFailure.identityMismatch }
         return page
     }
+    /// Calls the outline tool and validates revision and source-profile identity.
     public func outline(_ input: OutlineInput) async throws -> Outline {
         let outline = try await call("get_article_outline", input, Outline.self)
         guard profile.admits(outline.snapshot), outline.snapshot.project == input.project,
@@ -68,12 +70,14 @@ public actor MCPResearchClient {
               outline.sections.allSatisfy({ $0.location.snapshot == outline.snapshot }) else { throw MCPResearchFailure.identityMismatch }
         return outline
     }
+    /// Calls the section tool and verifies snapshot and selected-part identity.
     public func section(_ input: SectionInput) async throws -> SectionPassage {
         let passage = try await call("read_article_section", input, SectionPassage.self)
         guard passage.snapshot == input.snapshot, passage.provenance.identity == input.snapshot,
               passage.selectedPartID == input.part.partID else { throw MCPResearchFailure.identityMismatch }
         return passage
     }
+    /// Calls the reference tool and verifies snapshot provenance and association shape.
     public func references(_ input: ReferencesInput) async throws -> SectionReferences {
         let refs = try await call("get_section_references", input, SectionReferences.self)
         guard refs.snapshot == input.snapshot, refs.provenance.identity == input.snapshot,

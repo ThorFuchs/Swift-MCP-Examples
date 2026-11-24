@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 
+/// Validates and normalizes owned fictional fixture input within the configured resource limits.
 public enum Normalizer {
     public static let provider = "synthetic-fixture"
     public static func component(_ value: String) -> Bool {

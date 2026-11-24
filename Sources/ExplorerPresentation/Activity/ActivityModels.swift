@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 
+/// Origin of retained app observation; direct local research is not MCP handler traffic.
 public enum EventOrigin: String, Codable, Sendable, CaseIterable { case localResearch = "Local research", externalMCP = "External MCP", server = "Server" }
+/// Display severity of a redacted event.
 public enum EventSeverity: String, Codable, Sendable, CaseIterable { case info = "Info", warning = "Warning", error = "Error" }
+/// Observed lifecycle or eligible-handler outcome.
 public enum EventOutcome: String, Codable, Sendable { case started, success, toolProblem, cancelled, failed, stopped }
+/// Bounded redacted event metadata; never an arbitrary request or response payload.
 public struct ActivityEvent: Identifiable, Codable, Sendable {
     public let id: UUID, runID: UUID?
     public let date: Date
@@ -15,6 +19,7 @@ public struct ActivityEvent: Identifiable, Codable, Sendable {
     public var logicalBytes: Int { 128 + component.utf8.count + operation.utf8.count + summary.utf8.count + severity.rawValue.utf8.count + origin.rawValue.utf8.count + outcome.rawValue.utf8.count }
     public var detail: String { "\(operation) · \(outcome.rawValue)\n\(summary)\nOrigin: \(origin.rawValue)\nRun: \(runID?.uuidString ?? "Not applicable")\nCorrelation: \(correlation?.uuidString ?? "Not supplied")\nDuration: \(durationMilliseconds.map { "\($0) ms" } ?? "Unavailable")\nPayload and credentials are not recorded." }
 }
+/// Display/export filter over the existing redacted event projection.
 public struct ActivityFilter: Codable, Sendable, Equatable {
     public let search: String
     public let severity: EventSeverity?
@@ -31,7 +36,9 @@ public struct ActivityFilter: Codable, Sendable, Equatable {
         (severity == nil || severity == event.severity) && (origin == nil || origin == event.origin) && (component == nil || component == event.component) && (search.isEmpty || event.operation.localizedCaseInsensitiveContains(search) || event.summary.localizedCaseInsensitiveContains(search))
     }
 }
+/// A five-second monotonic histogram bucket projected onto wall-clock time for display.
 public struct RequestBucket: Identifiable, Sendable { public let slot: Int64; public let date: Date; public let calls: UInt64; public var id: Int64 { slot } }
+/// Immutable bounded observation of the store's current or last server run and retained events.
 public struct ActivitySnapshot: Sendable {
     public let events: [ActivityEvent], recentCalls: [ActivityEvent], buckets: [RequestBucket]
     public let runID: UUID?
@@ -42,6 +49,7 @@ public struct ActivitySnapshot: Sendable {
     public var metricsAvailable: Bool { runID != nil }
     public static let empty = ActivitySnapshot(events: [], recentCalls: [], buckets: [], runID: nil, discarded: 0, retainedBytes: 0, active: 0, completed: 0, failed: 0, cancelled: 0, medianMilliseconds: nil, durationSampleCount: 0, metricsPartial: false)
 }
+/// Injectable monotonic and wall clocks; monotonic time governs durations and rolling windows.
 public struct ActivityClock: Sendable {
     public let milliseconds: @Sendable () -> Int64
     public let wall: @Sendable () -> Date

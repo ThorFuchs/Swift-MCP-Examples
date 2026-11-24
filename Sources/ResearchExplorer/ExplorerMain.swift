@@ -8,6 +8,8 @@ import MCPClient
 import MCPClientStdio
 import System
 
+/// Command-line example with explicit direct walkthrough, stdio server and real stdio client modes.
+/// The stdio server reserves stdout for protocol frames; direct walkthrough is not an MCP exchange.
 @main struct ResearchExplorer {
     static func main() async {
         let args = Array(CommandLine.arguments.dropFirst())

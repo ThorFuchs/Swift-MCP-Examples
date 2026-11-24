@@ -2,6 +2,8 @@
 import Foundation
 import ExplorerDomain
 
+/// Bounded, source-profile-specific research service and owner of revision snapshot caching.
+/// Section and reference operations require the exact admitted revision; they do not silently fetch a replacement.
 public actor ExplorerService {
     public nonisolated let profile: SourceProfile
     private let provider: any ExplorerProvider
@@ -13,6 +15,7 @@ public actor ExplorerService {
                 clock: @escaping @Sendable () -> Date = { Date() }) {
         self.profile = provider.profile; self.provider = provider; self.limits = limits; self.clock = clock; self.cache = .init(limits: limits)
     }
+    /// Searches the selected provider after validating the project, query and result bounds.
     public func search(_ input: SearchInput) async throws -> SearchPage {
         try allowed(input.project); try Task.checkCancellation()
         let query = input.query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -27,6 +30,7 @@ public actor ExplorerService {
               Set(result.candidates.map(\.id)).count == result.candidates.count else { throw Self.providerContract() }
         return result
     }
+    /// Resolves and admits a candidate revision, caches its snapshot and projects a bounded outline.
     public func outline(_ input: OutlineInput) async throws -> Outline {
         try allowed(input.project); try Task.checkCancellation()
         guard Normalizer.component(input.candidateID) else { throw Self.arguments() }
@@ -53,6 +57,7 @@ public actor ExplorerService {
         try await cache.insert(snapshot, now: now)
         return try SnapshotProjection.outline(snapshot)
     }
+    /// Reads a bounded passage from the exact cached snapshot and part identity.
     public func section(_ input: SectionInput) async throws -> SectionPassage {
         try identity(input.snapshot, part: input.part)
         let maximum = input.maxTextBytes ?? limits.sectionTextBytes
@@ -60,6 +65,7 @@ public actor ExplorerService {
         let snapshot = try await cache.get(input.snapshot, now: clock())
         return try SnapshotProjection.section(snapshot, part: input.part, maximumBytes: maximum)
     }
+    /// Reads reference metadata and citation associations from the exact cached snapshot.
     public func references(_ input: ReferencesInput) async throws -> SectionReferences {
         try identity(input.snapshot, part: input.part)
         return try SnapshotProjection.references(await cache.get(input.snapshot, now: clock()), part: input.part)

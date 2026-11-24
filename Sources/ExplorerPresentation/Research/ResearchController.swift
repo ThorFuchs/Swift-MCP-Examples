@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import ExplorerDomain
 
+/// Main-actor owner of interactive research state and revision-pinned presentation.
 @MainActor @Observable public final class ResearchController {
     public let source: ResearchSource
     public var query = ""
