@@ -37,6 +37,14 @@ struct PreparedSource: Sendable {
     private(set) var research: ResearchController?
     private(set) var startupProblem: String?
     var destination = Workspace.research
+    var activityBucketScope: MachineRoomBucketScope?
+
+    /// A presentation-only historical filter; the store and export schema are unchanged.
+    func showActivity(for scope: MachineRoomBucketScope? = nil) {
+        activityBucketScope = scope
+        destination = .activity
+    }
+
     var searchFocus = UUID()
     var isQuitting = false
     weak var mainWindow: NSWindow?

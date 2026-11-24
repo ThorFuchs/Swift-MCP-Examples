@@ -22,7 +22,10 @@ struct ServerView: View {
                         snapshot: lifetime.activitySnapshot
                     )
                     commandDeck(server)
-                    MachineRoomOverview(projection: projection)
+                    MachineRoomOverview(projection: projection) { scope in
+                        lifetime.showActivity(for: scope)
+                    }
+                    .id(projection.runID)
                     MCPJourneyView(lifetime: lifetime, journey: lifetime.journey, running: server.phase == .running)
                     recentCalls(projection)
                 } else {
@@ -125,7 +128,7 @@ struct ServerView: View {
             } else {
                 ContentUnavailableView("No retained calls for this run", systemImage: "arrow.left.arrow.right", description: Text("An eligible tool handler must reach a terminal path before it appears here. Local Research is separate."))
             }
-            HStack { Spacer(); Button("View activity") { lifetime.destination = .activity } }
+            HStack { Spacer(); Button("View activity") { lifetime.showActivity() } }
                 .padding(ExplorerDesign.Space.xs)
             Text("Recent 50 retained terminal handlers at most. Calls may come from any client; pre-handler rejections and connection counts are not observed.")
                 .font(ExplorerDesign.Typography.detail)

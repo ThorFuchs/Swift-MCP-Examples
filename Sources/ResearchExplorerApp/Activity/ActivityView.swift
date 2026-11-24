@@ -15,8 +15,12 @@ struct ActivityView: View {
     @State private var sortOrder = [KeyPathComparator(\ActivityEvent.date)]
     @FocusState private var searchFocused: Bool
     private var filter: ActivityFilter { .init(search: filterText, severity: severity, origin: origin, component: component) }
-    private var rows: [ActivityEvent] { lifetime.activitySnapshot.events.filter(filter.includes).sorted(using: sortOrder) }
-    private var selected: ActivityEvent? { lifetime.activitySnapshot.events.first { $0.id == selectedID } }
+    private var rows: [ActivityEvent] {
+        lifetime.activitySnapshot.events
+            .filter { event in filter.includes(event) && (lifetime.activityBucketScope?.includes(event) ?? true) }
+            .sorted(using: sortOrder)
+    }
+    private var selected: ActivityEvent? { rows.first { $0.id == selectedID } }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             ExplorerScreenHeading(
@@ -24,6 +28,28 @@ struct ActivityView: View {
                 title: "Activity",
                 summary: "A clear view of local research, eligible MCP handler calls and app-owned server lifecycle. Bounded and redacted: no arguments, results, headers or credentials."
             )
+            if let scope = lifetime.activityBucketScope {
+                ExplorerPanel {
+                    VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
+                        Label("Selected Activity Pulse interval", systemImage: "scope")
+                            .font(ExplorerDesign.Typography.panel)
+                        Text("\(scope.start.formatted(date: .abbreviated, time: .standard)) – \(scope.end.formatted(date: .omitted, time: .standard))")
+                            .font(ExplorerDesign.Typography.mono)
+                        Text("Run: \(scope.runID.uuidString)")
+                            .font(ExplorerDesign.Typography.mono)
+                            .textSelection(.enabled)
+                        Text("Retained terminal events matching the selected wall-clock interval. Retention and clock changes can make these rows differ from the chart count. Existing filters also apply.")
+                            .font(ExplorerDesign.Typography.detail)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Clear interval filter", systemImage: "xmark.circle") {
+                            lifetime.activityBucketScope = nil
+                        }
+                        .buttonStyle(.glass)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
             ExplorerPanel {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 180), spacing: ExplorerDesign.Space.md)],
@@ -42,10 +68,14 @@ struct ActivityView: View {
                     Text("All origins").tag(EventOrigin?.none)
                     ForEach(EventOrigin.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
                 }.frame(maxWidth: 190)
-                Toggle("Follow tail", isOn: $followTail).help("Display only. Collection and the server continue unchanged.")
+                Toggle("Follow tail", isOn: $followTail)
+                    .disabled(lifetime.activityBucketScope != nil)
+                    .help("Display only. Collection and the server continue unchanged.")
                 }
             }
-            if lifetime.activitySnapshot.events.isEmpty {
+            if lifetime.activityBucketScope != nil && rows.isEmpty {
+                ContentUnavailableView("No matching retained terminals", systemImage: "clock", description: Text("No retained events match the selected run, wall-clock interval and filters. This does not prove that no handlers completed."))
+            } else if lifetime.activitySnapshot.events.isEmpty {
                 ContentUnavailableView("No activity yet", systemImage: "waveform.path", description: Text("Search an offline article or explicitly start this app's server."))
             } else if rows.isEmpty {
                 ContentUnavailableView.search(text: filterText)
@@ -57,7 +87,7 @@ struct ActivityView: View {
                         TableColumn("Component", value: \.component).width(min: 85, ideal: 100)
                         TableColumn("Event", value: \.summary)
                     }
-                    .onChange(of: rows.last?.id) { if followTail, let last = rows.last { proxy.scrollTo(last.id, anchor: .bottom) } }
+                    .onChange(of: rows.last?.id) { if followTail, lifetime.activityBucketScope == nil, let last = rows.last { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }.frame(minHeight: 200)
             }
             Divider()
@@ -69,7 +99,7 @@ struct ActivityView: View {
                 Text("Select an event to inspect its redacted details.").foregroundStyle(.secondary)
             }
             HStack {
-                Text("\(lifetime.activitySnapshot.events.count) events retained · \(lifetime.activitySnapshot.discarded) discarded").monospacedDigit()
+                Text("\(rows.count) shown · \(lifetime.activitySnapshot.events.count) retained overall · \(lifetime.activitySnapshot.discarded) discarded").monospacedDigit()
                 Spacer(); Text("Bounded projected metadata only")
             }
             .font(ExplorerDesign.Typography.detail)
@@ -84,7 +114,15 @@ struct ActivityView: View {
                 TextField("Search activity", text: $filterText).frame(minWidth: 200, idealWidth: 320).focused($searchFocused).accessibilityLabel("Search retained activity")
             }
             ToolbarItem { Button("Copy event", systemImage: "doc.on.doc") { if let selected { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(selected.detail, forType: .string) } }.disabled(selected == nil) }
-            ToolbarItem { Button("Export…", systemImage: "square.and.arrow.up") { lifetime.export(filter: filter) }.disabled(lifetime.exporting) }
+            ToolbarItem {
+                Button("Export…", systemImage: "square.and.arrow.up") { lifetime.export(filter: filter) }
+                    .disabled(lifetime.exporting || lifetime.activityBucketScope != nil)
+                    .help(lifetime.activityBucketScope == nil ? "Export the existing filtered activity." : "Clear the interval filter before exporting; interval export is not supported.")
+            }
+        }
+        .onChange(of: lifetime.activityBucketScope, initial: true) {
+            selectedID = nil
+            if lifetime.activityBucketScope != nil { followTail = false }
         }
         .onChange(of: focusID) { searchFocused = true }
         .onChange(of: filterText) { if filterText.count > 256 { filterText = String(filterText.prefix(256)) } }

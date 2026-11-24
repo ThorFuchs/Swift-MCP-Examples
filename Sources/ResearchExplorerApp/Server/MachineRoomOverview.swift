@@ -6,6 +6,13 @@ import ExplorerPresentation
 /// not fetch, poll, start a server, or manufacture a metric.
 struct MachineRoomOverview: View {
     let projection: MachineRoomProjection
+    let onInspect: (MachineRoomBucketScope) -> Void
+    @State private var pausedProjection: MachineRoomProjection?
+
+    private var chartsPaused: Bool {
+        projection.scope == .live && projection.metrics != nil
+            && pausedProjection?.scope == .live && pausedProjection?.runID == projection.runID
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: ExplorerDesign.Space.md) {
@@ -74,9 +81,37 @@ struct MachineRoomOverview: View {
                 .font(ExplorerDesign.Typography.detail)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            RequestActivityChart(projection: projection)
+            VStack(alignment: .leading, spacing: ExplorerDesign.Space.md) {
+                HStack {
+                    Text("Analytics")
+                        .font(ExplorerDesign.Typography.section)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: ExplorerDesign.Space.xs)
+                    if projection.scope == .live, projection.metrics != nil {
+                        Button(chartsPaused ? "Resume charts" : "Pause charts", systemImage: chartsPaused ? "play.fill" : "pause.fill") {
+                            pausedProjection = chartsPaused ? nil : projection
+                        }
+                        .buttonStyle(.glass)
+                        .help("Freeze only the charts; live KPIs and the server continue unchanged.")
+                    }
+                }
+                if chartsPaused {
+                    Label("Charts paused · KPI values above remain live.", systemImage: "pause.circle")
+                        .font(ExplorerDesign.Typography.detail)
+                        .foregroundStyle(.secondary)
+                }
+                let chartProjection = MachineRoomAnalytics.chartProjection(current: projection, paused: pausedProjection)
+                RequestActivityChart(projection: chartProjection, onInspect: onInspect)
+                if let analytics = MachineRoomAnalytics(projection: chartProjection) {
+                    MachineRoomAnalyticsGrid(analytics: analytics)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: projection.scope) {
+            if projection.scope != .live { pausedProjection = nil }
+        }
+        .onChange(of: projection.runID) { pausedProjection = nil }
     }
 
     private var medianLabel: String {
