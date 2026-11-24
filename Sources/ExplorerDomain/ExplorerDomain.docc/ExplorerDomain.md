@@ -30,6 +30,8 @@ which provider, project and normalizer identities are admitted.
 - ``Outline``
 - ``SectionPassage``
 - ``RelatedKnowledge``
+- ``RevisionHistory``
+- ``RevisionHistoryEntry``
 - ``SectionReferences``
 
 ### Admission and limits

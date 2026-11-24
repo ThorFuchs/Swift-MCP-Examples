@@ -13,3 +13,7 @@ Native historical HTML admission is R4b: capture/verify the distinct revision re
 Reference: https://www.mediawiki.org/wiki/API:REST_API/Reference (Get page history; Get revision information with HTML; Compare revisions).
 
 Native gates: RevisionHistoryTests, LiveProviderTests, full RE04 regression and a new opt-in live history probe. Native rendering, live API response and warning-free DocC are not yet qualified.
+
+## Native live test
+
+The existing live qualification script now runs a fourth independent case, earlierWikipediaHistoryPreservesPin. It requires the real Noether article, reads one section, requests earlier history, optionally loads one older page, and checks unchanged pin/passage/reference metadata, page separation, local-only observation and joined app cleanup. Four cases must run; historical metadata is not a native historical HTML proof.

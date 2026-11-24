@@ -245,4 +245,57 @@ import ExplorerPresentation
         }
         print("LIVE_WIKI INTERACTIVE PASS joined=true")
     }
+
+    /// R4a: real bounded title history anchored to an admitted revision.
+    /// The native reader remains pinned; no browser navigation is executed by tests.
+    @Test func earlierWikipediaHistoryPreservesPin() async throws {
+        try await withLiveApp { app in
+            let reader = try #require(app.research)
+            try #require(app.researchMode == .direct && reader.supportsRevisionHistory)
+            reader.query = self.query
+            reader.search(); await reader.waitUntilIdle()
+            let candidate = try #require(reader.page?.candidates.first {
+                $0.title.caseInsensitiveCompare(self.query) == .orderedSame
+            })
+            reader.open(candidate); await reader.waitUntilIdle()
+            let outline = try #require(reader.outline)
+            try self.checkOutline(outline, candidatePage: candidate.pageID)
+            let part = try #require(outline.sections.first?.location)
+            reader.read(part); await reader.waitUntilIdle()
+            let passage = try #require(reader.passage)
+            try #require(reader.phase == .section)
+            let referenceProblem = reader.referenceProblem?.code
+            let referenceIDs = reader.citations?.references.map(\.id)
+            print("LIVE_WIKI history stage=earlier_revisions pin=\(outline.snapshot.revisionID)")
+            reader.loadRevisionHistory()
+            await reader.waitUntilIdle()
+            if let problem = reader.historyProblem { print("LIVE_WIKI history problem=\(problem.code.rawValue)") }
+            try #require(reader.historyProblem == nil)
+            let history = try #require(reader.revisionHistory)
+            try #require(history.isAdmitted && history.pinned == outline.snapshot && history.anchor == outline.snapshot.revisionID)
+            try #require(!history.entries.isEmpty)
+            try #require(history.entries.allSatisfy { $0.permalink != nil && $0.comparisonURL(to: history.pinned.revisionID) != nil })
+            try #require(reader.outline?.snapshot == outline.snapshot && reader.selectedPart == part)
+            try #require(reader.passage?.text == passage.text && reader.referenceProblem?.code == referenceProblem)
+            try #require(reader.citations?.references.map(\.id) == referenceIDs)
+            if let next = history.nextAnchor {
+                reader.loadRevisionHistory(older: true)
+                await reader.waitUntilIdle()
+                if let problem = reader.historyProblem { print("LIVE_WIKI history older_problem=\(problem.code.rawValue)") }
+                try #require(reader.historyProblem == nil)
+                let older = try #require(reader.revisionHistory)
+                try #require(older.isAdmitted && older.pinned == outline.snapshot && older.anchor == next)
+                try #require(Set(older.entries.map(\.id)).isDisjoint(with: Set(history.entries.map(\.id))))
+                try #require(reader.outline?.snapshot == outline.snapshot && reader.passage?.text == passage.text)
+                print("LIVE_WIKI history older_entries=\(older.entries.count)")
+            }
+            let activity = await app.activity.snapshot()
+            try #require(!activity.metricsAvailable && app.server?.phase == .stopped)
+            try #require(activity.events.contains { $0.origin == .localResearch && $0.operation == "get_revision_history" && $0.outcome == .success })
+            print("LIVE_WIKI history verified pin=\(history.pinned.revisionID) entries=\(history.entries.count) has_older=\(history.hasOlder)")
+            reader.back()
+            try #require(reader.revisionHistory == nil)
+        }
+        print("LIVE_WIKI HISTORY PASS joined=true")
+    }
 }

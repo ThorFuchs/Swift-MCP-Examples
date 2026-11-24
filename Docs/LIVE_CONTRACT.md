@@ -35,3 +35,7 @@ math/active elements are omitted and that scope is visible in the reader.
 Separate Live-v1 definitions
 use enwiki/openWorldHint=true and the same four names. App, catalogs and HTTP host
 share the same service instance for a selected profile. No legacy MCP is added.
+
+## R4a earlier revision metadata
+
+The optional direct history path adds one exact-origin REST route: page/{single-encoded-returned-key}/history with exactly one older_than positive Int64 decimal query. It requires an admitted candidate and cache pin and uses the same finite provider/transport admission. Returned older URLs are never followed; the last returned positive ID is the next explicit anchor. At most twenty metadata rows are retained. Editor identity and comments are not decoded into the owned DTO. History does not admit historical content or prove page-ID correspondence for each title-scoped revision. No MCP tool, new origin or revision HTML route is added.
