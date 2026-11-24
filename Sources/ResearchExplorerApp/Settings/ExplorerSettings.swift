@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import SwiftUI
 
+/// User-controlled appearance and reader typography preferences.
 struct ExplorerSettings: View {
     @AppStorage("readerSize") private var readerSize = ExplorerDesign.Reader.defaultSize
     @AppStorage("appearance") private var appearance = "system"

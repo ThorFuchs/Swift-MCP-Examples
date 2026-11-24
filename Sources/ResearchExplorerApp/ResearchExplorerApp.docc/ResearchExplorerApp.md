@@ -20,8 +20,30 @@ explicitly.
 
 - <doc:AppArchitecture>
 - <doc:MachineRoomGuide>
+- ``AppLifetime``
+- ``ExplorerRootView``
+
+### Research and activity
+
+- ``ResearchView``
+- ``ArticleReaderView``
+- ``ReadingPane``
+- ``EvidencePane``
+- ``ActivityView``
+
+### Machine Room views
+
+- ``ServerView``
+- ``MachineRoomOverview``
+- ``RequestActivityChart``
+- ``MachineRoomAnalyticsGrid``
+- ``MCPJourneyView``
+- ``JourneyMilestoneRail``
+- ``JourneyExchangeCharts``
 
 ### Design and accessibility
 
 - <doc:MotionAndAccessibility>
 - <doc:NativeReview>
+- ``ExplorerDesign``
+- ``ExplorerSettings``

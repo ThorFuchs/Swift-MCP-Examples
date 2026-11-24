@@ -14,7 +14,8 @@ public struct MCPJourneyStep: Sendable, Identifiable, Equatable {
     public let method: String
     public let tool: String?
     public let status: Status
-    /// The SDK checked structuredContent against the tool's outputSchema and the adapter checked identity.
+    /// True when the observed stage completed its checks. Preparation checks the protocol
+    /// and catalogue; tool stages check the SDK output schema and adapter identity.
     public let validated: Bool
     public let milliseconds: Int
     /// Revision of the snapshot this step returned or read, when it has one.

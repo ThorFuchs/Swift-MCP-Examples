@@ -2,6 +2,7 @@
 import SwiftUI
 import AppKit
 
+/// Native keyboard shortcuts for workspace navigation and search.
 struct ExplorerCommands: Commands {
     let lifetime: AppLifetime
     @Environment(\.openWindow) private var openWindow

@@ -3,6 +3,7 @@ import SwiftUI
 import ExplorerDomain
 import ExplorerPresentation
 
+/// Native research entry, explicit search and revision-bound reader presentation.
 struct ResearchView: View {
     @Bindable var model: ResearchController
     let focusID: UUID

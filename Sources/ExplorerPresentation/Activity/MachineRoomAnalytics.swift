@@ -80,7 +80,9 @@ public struct MachineRoomAnalytics: Sendable {
         public let cancelled: UInt64
     }
 
+    /// Identity of the run that owns every projected sample.
     public let runID: UUID
+    /// The original bounded rolling histogram for this run.
     public let buckets: [RequestBucket]
     /// Number of eligible retained terminal calls used by the secondary charts (at most 50).
     public let recentCount: Int

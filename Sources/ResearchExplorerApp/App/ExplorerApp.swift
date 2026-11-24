@@ -2,6 +2,7 @@
 import SwiftUI
 import ExplorerPresentation
 
+/// Native macOS application entry point, window configuration and Settings scene.
 @main struct ResearchExplorerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var lifetime = AppLifetime()
