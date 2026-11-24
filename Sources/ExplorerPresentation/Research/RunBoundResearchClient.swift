@@ -5,7 +5,7 @@ import ExplorerMCP
 import MCPClient
 
 /// A user-selected execution route, independent of the source profile.
-public enum ResearchExecutionMode: String, CaseIterable, Sendable {
+public enum ResearchExecutionMode: String, CaseIterable, Codable, Sendable {
     case direct = "Direct"
     case mcp = "Via MCP"
 }

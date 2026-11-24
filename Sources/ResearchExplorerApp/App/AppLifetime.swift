@@ -43,6 +43,12 @@ struct PreparedSource: Sendable {
     private(set) var researchMode: ResearchExecutionMode = .direct
     private(set) var researchRunID: UUID?
     private(set) var researchModeProblem: String?
+    private(set) var collection = ResearchCollection()
+    var collectionMessage: String?
+    var canCollectEvidence: Bool {
+        canChangeResearchMode && researchRouteReady && research?.phase == .section
+            && research?.passage?.textAvailable == true && research?.passage?.text.isEmpty == false
+    }
     var canChangeResearchMode: Bool { !isQuitting && !termination.unsettled && bootstrap == nil && service != nil }
     var canUseMCPResearch: Bool { canChangeResearchMode && server?.phase == .running && server?.endpoint != nil && server?.runID != nil }
     var researchRouteReady: Bool {
@@ -230,6 +236,55 @@ struct PreparedSource: Sendable {
             bootstrap = nil; isQuitting = false
         }
     }
+    /// Capture only the settled section currently displayed by the selected route.
+    func collectEvidence() {
+        guard canCollectEvidence, let reader = research, let outline = reader.outline,
+              let part = reader.selectedPart, let passage = reader.passage else { return }
+        do {
+            try collection.capture(outline: outline, part: part, passage: passage, references: reader.citations,
+                                   referenceProblem: reader.referenceProblem?.code, route: researchMode)
+            collectionMessage = "Section added to the in-memory collection."
+        } catch ResearchCollection.Failure.alreadyCollected {
+            collectionMessage = "This exact revision and section are already collected."
+        } catch {
+            collectionMessage = "Collection admission failed. Check source identity or collection limits."
+        }
+    }
+
+    func updateEvidenceNote(_ note: String, id: UUID) {
+        guard !isQuitting, !termination.unsettled else { return }
+        do { try collection.setNote(note, for: id); collectionMessage = nil }
+        catch { collectionMessage = "Note not saved: the 4 KiB note or collection limit was reached." }
+    }
+
+    func removeEvidence(_ id: UUID) {
+        guard !isQuitting, !termination.unsettled else { return }
+        collection.remove(id); collectionMessage = nil
+    }
+
+    func exportCollection(_ format: ResearchCollection.Format) {
+        guard exportTask == nil, !isQuitting, !termination.unsettled, !collection.entries.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Research-Collection." + format.fileExtension
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        let snapshot = collection
+        exporting = true; collectionMessage = nil
+        exportTask = Task { [self] in
+            defer { exporting = false; exportTask = nil }
+            do {
+                try await exportWriter.writeCollection(snapshot, format: format, to: destination)
+                collectionMessage = "Collection exported."
+            } catch is ExportSettlementFailure {
+                exportCleanupDebt = true
+                collectionMessage = "Export cleanup remains unresolved; quit will retain this failure."
+            } catch is CancellationError {
+                collectionMessage = "Collection export cancelled."
+            } catch {
+                collectionMessage = "Collection export was not completed."
+            }
+        }
+    }
+
     func export(filter: ActivityFilter) {
         guard exportTask == nil, !isQuitting, !termination.unsettled else { return }
         let panel = NSSavePanel(); panel.nameFieldStringValue = "Explorer-activity.json"

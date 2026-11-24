@@ -1,0 +1,7 @@
+# R3 — Evidence Collection
+
+The Research workspace has Collect section and Collection controls, not a new navigation destination. Capture the displayed settled revision/part, bounded text and exact reference projection (or typed reference problem). Keep source attribution, license, retrieval and revision; distinguish fictional data and execution route. Dedupe by full snapshot and part. User notes are separate, editable and never sent to MCP/Activity. The collection is in-memory and survives source/mode switches and cache expiry, not app quit. No auto-save, database, sync, LLM or new network request.
+
+Bounds: 16 entries, 128 KiB serialized per entry, 512 KiB aggregate encoded entry bytes, 4 KiB note, 4 MiB export. Admission before mutation; no silent clipping of a captured section. JSON v1 uses Foundation local document encoding, not a new protocol format. Markdown escapes source text/notes and preserves source revision, contributors/history, license, explicit text and reference truncation and unresolved citations. This is a normalized excerpt, not an independently verified source. Existing file writer and quit settlement own explicit file exports. No Activity export changes or telemetry payloads.
+
+Native acceptance: ResearchCollectionTests, real reader capture, repeat capture rejection, notes and export after route/source change, Markdown and JSON content/attribution, cancel file export and joined quit. No native result yet.

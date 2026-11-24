@@ -6,12 +6,28 @@ import ExplorerPresentation
 /// starts a listener or automatically changes the selected source.
 struct ResearchModeBar: View {
     @Bindable var lifetime: AppLifetime
+    @State private var showCollection = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
             HStack {
                 SourceBadge(source: lifetime.profile)
                 Spacer(minLength: 4)
+                Button {
+                    lifetime.collectEvidence()
+                } label: {
+                    Label("Collect section", systemImage: "bookmark.badge.plus").labelStyle(.iconOnly)
+                }
+                .buttonStyle(.glass)
+                .disabled(!lifetime.canCollectEvidence)
+                .help("Save the displayed revision, section and reference metadata.")
+                Button {
+                    showCollection = true
+                } label: {
+                    Label("Collection (\(lifetime.collection.entries.count))", systemImage: "books.vertical")
+                }
+                .buttonStyle(.glass)
+                .help("Open the research collection.")
                 Menu {
                     Button("Direct", systemImage: "arrow.right") { lifetime.selectResearchMode(.direct) }
                         .disabled(lifetime.researchMode == .direct)
@@ -33,11 +49,15 @@ struct ResearchModeBar: View {
                 Text("Research requests use the real local MCP client and appear in Server metrics.")
                     .font(ExplorerDesign.Typography.detail).foregroundStyle(.secondary)
             }
+            if let message = lifetime.collectionMessage {
+                Text(message).font(ExplorerDesign.Typography.detail).foregroundStyle(.secondary)
+            }
             if let problem = lifetime.researchModeProblem {
                 Text(problem).font(ExplorerDesign.Typography.detail).foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, ExplorerDesign.Space.md)
         .padding(.vertical, ExplorerDesign.Space.xs)
+        .sheet(isPresented: $showCollection) { EvidenceCollectionView(lifetime: lifetime) }
     }
 }
