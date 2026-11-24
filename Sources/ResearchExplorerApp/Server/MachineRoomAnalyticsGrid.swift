@@ -137,7 +137,10 @@ struct MachineRoomAnalyticsGrid: View {
                     }
                     ForEach(values) { slice in
                         HStack {
-                            Label(slice.title, systemImage: slice.symbol)
+                            Image(systemName: slice.symbol)
+                                .foregroundStyle(slice.color)
+                                .accessibilityHidden(true)
+                            Text(slice.title)
                             Spacer()
                             Text("\(slice.count)").monospacedDigit()
                         }
