@@ -18,11 +18,14 @@ public struct ServerEndpoint: Sendable, Equatable {
     public var url: String { "http://\(host):\(port)/mcp" }
 }
 public enum HostFailure: String, Error, Sendable { case invalidConfiguration, startFailed, catalogUnavailable, stopFailed, unexpectedStop, cleanupDebt }
+/// Actual state of the explicitly controlled local server; stopped is distinct from failed.
 public enum ServerPhase: String, Sendable { case stopped = "Stopped", starting = "Starting", running = "Running", stopping = "Stopping", failed = "Failed" }
 public protocol ExplorerHTTPHost: Sendable {
     func run(ready: @escaping @Sendable (ServerEndpoint) async -> Void) async throws
     func stop() async throws
 }
+/// Owns the app's loopback host run and its shutdown transition.
+/// View state and animation never replace or settle either owner.
 @MainActor @Observable public final class ServerController {
     public private(set) var phase = ServerPhase.stopped
     public private(set) var endpoint: ServerEndpoint?
@@ -43,6 +46,7 @@ public protocol ExplorerHTTPHost: Sendable {
     public init(activity: ActivityStore, factory: @escaping @Sendable (UUID) throws -> any ExplorerHTTPHost) {
         self.activity = activity; self.factory = factory
     }
+    /// Starts one local run if admission allows; readiness is reported asynchronously by the host.
     public func start() {
         guard canStart else { return }
         let id = UUID(); generation &+= 1; let token = generation
@@ -72,6 +76,7 @@ public protocol ExplorerHTTPHost: Sendable {
         if !cleanupDebt { host = nil }
     }
     public func stop() { stop(restart: false) }
+    /// Requests a joined stop followed by a new run, subject to the existing lifecycle admission rules.
     public func restart() { stop(restart: true) }
     private func stop(restart: Bool) {
         guard transition == nil else { return }

@@ -18,13 +18,18 @@ public actor ActivityStore {
     private var samples: [(tick: Int64, duration: Int64)] = []
     private var buckets: [Int64: UInt64] = [:]
     public init(clock: ActivityClock = .continuous()) { self.clock = clock }
+    /// Resets per-run observation for a new server run.
+    /// Throws if active invocations from a prior run have not settled.
     public func beginRun(_ id: UUID) throws {
         guard active.isEmpty else { throw Failure.activeRun }
         runID = id; completed = 0; failed = 0; cancelled = 0; partial = false
         samples.removeAll(); buckets.removeAll(); recent.removeAll()
         append(origin: .server, operation: "run", outcome: .started, summary: "A new app-owned server run was requested.")
     }
+    /// Discloses that complete handler observation cannot be guaranteed.
     public func markPartial() { partial = true }
+    /// Admits a bounded eligible handler observation and returns its correlation token.
+    /// A stale run or capacity overflow marks observation partial and returns nil.
     public func startCall(run id: UUID, operation: String, profile: SourceProfile = .offlineDemo) -> UUID? {
         guard runID == id, active.count < 128 else { partial = true; return nil }
         let token = UUID(), tick = now()
@@ -32,6 +37,7 @@ public actor ActivityStore {
         append(origin: .externalMCP, operation: operation, outcome: .started, summary: profile.rawValue + " eligible tool handler started.", correlation: token)
         return token
     }
+    /// Settles an admitted token at most once, updating real terminal counters and retained samples.
     public func finishCall(_ token: UUID?, outcome: EventOutcome) {
         guard let token else { partial = true; return }
         guard let call = active.removeValue(forKey: token) else { return } // duplicate terminal cannot count twice
@@ -68,6 +74,7 @@ public actor ActivityStore {
         events.append(event); bytes += event.logicalBytes
         return event
     }
+    /// Returns a bounded immutable projection with the current five-minute monotonic window.
     public func snapshot() -> ActivitySnapshot {
         let tick = now(), wall = clock.wall(), slot = tick / 5000
         samples.removeAll { tick - $0.tick > 300_000 }; buckets = buckets.filter { $0.key > slot - 60 }

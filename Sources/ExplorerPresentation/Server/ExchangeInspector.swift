@@ -7,27 +7,34 @@ import ExplorerMCP
 /// One real SDK exchange as the transport saw it: metadata and sizes only. No request or response
 /// body, argument, header value, URL or error text is retained.
 public struct ExchangeRecord: Sendable, Identifiable, Equatable {
+    /// Transport-level terminal result; response does not establish application validation.
     public enum Outcome: String, Sendable { case response = "Response", failed = "Failed", cancelled = "Cancelled" }
     public let id: Int
     /// JSON-RPC method, e.g. `server/discover`, `tools/list`, `tools/call`.
     public let method: String
     /// The tool name of a `tools/call`, only when it is one of this app's four catalogue tools.
     public let tool: String?
+    /// Size of the outgoing SDK request body, excluding HTTP/TLS overhead.
     public let requestBytes: Int
     /// Messages delivered for this request: notifications plus the final response.
     public let messages: Int
+    /// Sum of delivered SDK message sizes, excluding HTTP/TLS framing.
     public let responseBytes: Int
     public let outcome: Outcome
+    /// Measured monotonic exchange duration in whole milliseconds.
     public let milliseconds: Int
 }
 
 /// Session-bound, bounded store for `ExchangeRecord`s. Created per journey only when the user opted
 /// in; never persisted or exported.
 public final class ExchangeRecorder: Sendable {
+    /// Maximum retained exchange records per inspected journey.
     public static let capacity = 32
     private let state = Mutex((records: [ExchangeRecord](), next: 0, dropped: 0))
     public init() {}
+    /// A bounded copy of retained metadata in completion-record order.
     public var records: [ExchangeRecord] { state.withLock { $0.records } }
+    /// Count of additional records not retained after capacity was reached.
     public var dropped: Int { state.withLock { $0.dropped } }
     fileprivate func append(_ make: (Int) -> ExchangeRecord) {
         state.withLock { s in

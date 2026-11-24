@@ -23,6 +23,7 @@ public struct MCPJourneyStep: Sendable, Identifiable, Equatable {
     public let failure: String?
 }
 
+/// Lifecycle of the finite, user-initiated guided client journey.
 public enum MCPJourneyPhase: String, Sendable { case idle = "Ready", running = "Running", completed = "Completed", failed = "Failed", cancelled = "Cancelled" }
 
 /// The "Explore MCP" journey: after an explicit user action against an already running local
@@ -80,9 +81,11 @@ public enum MCPJourneyPhase: String, Sendable { case idle = "Ready", running = "
             self?.task = nil
         }
     }
+    /// Requests cancellation of the owned task without claiming it has joined.
     public func cancel() { task?.cancel() }
     /// Cancels and joins; afterwards no client request of this journey is in flight.
     public func cancelAndJoin() async { task?.cancel(); await task?.value }
+    /// Closes the controller to new work, cancels and joins the owned task, then clears results.
     public func shutdown() async { closed = true; await cancelAndJoin(); clear() }
     /// Disposes every result and inspector record of past runs (server stop, source switch).
     public func clear() {
@@ -90,6 +93,7 @@ public enum MCPJourneyPhase: String, Sendable { case idle = "Ready", running = "
         phase = .idle; steps = []; serverName = nil; outline = nil; passage = nil; references = nil; problem = nil
         exchanges = []; droppedExchanges = 0; recorder = nil
     }
+    /// Waits for the owned journey task to finish without cancelling it.
     public func waitUntilFinished() async { await task?.value }
 
     private func record(_ method: String, _ tool: String?, _ start: ContinuousClock.Instant, revision: String? = nil, error: (any Error)? = nil) {
