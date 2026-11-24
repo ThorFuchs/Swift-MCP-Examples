@@ -21,6 +21,25 @@ public enum WikipediaRoute {
               let url = URL(string: origin + "/w/rest.php/v1/page/" + segment + "/with_html") else { throw LiveFailure.url }
         return url
     }
+    /// Constructs the title-addressed history endpoint from an already
+    /// admitted returned key; pagination is a bounded numeric cursor.
+    public static func history(_ key: String, olderThan: String? = nil) throws -> URL {
+        var components = URLComponents(url: try page(key), resolvingAgainstBaseURL: false)!
+        components.percentEncodedPath = String(components.percentEncodedPath.dropLast("/with_html".count)) + "/history"
+        if let olderThan {
+            guard RevisionHistoryEntry.isRevisionID(olderThan) else { throw LiveFailure.url }
+            components.queryItems = [.init(name: "older_than", value: olderThan)]
+        }
+        guard let url = components.url, allowed(url) else { throw LiveFailure.url }
+        return url
+    }
+
+    static func isHistoryRoute(_ url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return false }
+        let path = components.percentEncodedPath
+        return path.hasPrefix("/w/rest.php/v1/page/") && path.hasSuffix("/history")
+    }
+
     public static func allowed(_ url: URL) -> Bool {
         guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false), c.scheme == "https",
               c.host == "en.wikipedia.org", c.user == nil, c.password == nil, c.port == nil, c.fragment == nil else { return false }
@@ -31,10 +50,16 @@ public enum WikipediaRoute {
                 && (q.first(where: { $0.name == "q" })?.value?.utf8.count ?? 0) <= 256
                 && (1...20).contains(Int(q.first(where: { $0.name == "limit" })?.value ?? "") ?? 0)
         }
-        let prefix = "/w/rest.php/v1/page/", suffix = "/with_html"
-        guard p.hasPrefix(prefix), p.hasSuffix(suffix), c.query == nil else { return false }
+        let history = isHistoryRoute(url)
+        let prefix = "/w/rest.php/v1/page/", suffix = history ? "/history" : "/with_html"
+        guard p.hasPrefix(prefix), p.hasSuffix(suffix) else { return false }
         let segment = String(p.dropFirst(prefix.count).dropLast(suffix.count))
-        return !segment.isEmpty && !segment.contains("/") && segment != "." && segment != ".." && segment.utf8.count <= 3072
+        guard !segment.isEmpty && !segment.contains("/") && segment != "." && segment != ".." && segment.utf8.count <= 3072 else { return false }
+        if !history { return c.query == nil }
+        if c.query == nil { return true }
+        guard let items = c.queryItems, items.count == 1,
+              items[0].name == "older_than", let cursor = items[0].value else { return false }
+        return RevisionHistoryEntry.isRevisionID(cursor)
     }
 }
 
@@ -173,7 +198,14 @@ public actor WikipediaHTTPTransport: LiveTransport {
         request.timeoutInterval = min(15, Double(remaining.components.seconds) + Double(remaining.components.attoseconds) / 1e18)
         request.setValue("ResearchExplorer/0.1 (https://github.com/ThorFuchs)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let owner = OwnedWikipediaRequest(deadline: deadline, allowedURL: allowedURL)
+        // History lacks a page identity in its segment envelope. Keep the
+        // exact title/cursor URL; never let a redirect silently retarget it.
+        // Adding history to the allowlist must not widen prior operations.
+        let basePolicy = allowedURL, history = WikipediaRoute.isHistoryRoute(url)
+        let owner = OwnedWikipediaRequest(deadline: deadline, allowedURL: { target in
+            guard basePolicy(target) else { return false }
+            return history ? target.absoluteString == url.absoluteString : !WikipediaRoute.isHistoryRoute(target)
+        })
         let session = URLSession(configuration: configuration, delegate: owner, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         let timer = Task {

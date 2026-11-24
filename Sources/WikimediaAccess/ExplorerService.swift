@@ -70,6 +70,22 @@ public actor ExplorerService {
         try identity(input.snapshot, part: input.part)
         return try SnapshotProjection.references(await cache.get(input.snapshot, now: clock()), part: input.part)
     }
+    /// Title-addressed history, independent of the pinned snapshot cache.
+    /// Uses the same service admission permit as search and outline.
+    public func history(_ input: RevisionHistoryInput) async throws -> RevisionHistoryPage {
+        try allowed(input.snapshot.project); try Task.checkCancellation()
+        guard profile == .wikipediaEnglish, profile.admits(input.snapshot),
+              Normalizer.component(input.candidateID),
+              let historyProvider = provider as? any RevisionHistoryProvider else {
+            throw profile.problem(.unsupportedVariant)
+        }
+        try admit(); defer { inFlight -= 1 }
+        let result = try await historyProvider.history(input)
+        try Task.checkCancellation()
+        guard result.isAdmitted(for: input) else { throw Self.providerContract() }
+        return result
+    }
+
     private func identity(_ id: SnapshotID, part: PartLocation) throws {
         try allowed(id.project); try Task.checkCancellation()
         guard id == part.snapshot else {

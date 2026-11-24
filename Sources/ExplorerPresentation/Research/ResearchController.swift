@@ -19,6 +19,11 @@ import ExplorerMCP
     public private(set) var referenceProblem: ExplorerProblem?
     /// Explicit revision check; never replaces `outline`, `passage` or `citations`.
     public private(set) var comparison: RevisionComparison?
+    /// One title-addressed segment for the current article; never a replacement snapshot.
+    public private(set) var revisionHistory: RevisionHistoryPage?
+    public private(set) var revisionHistoryProblem: ExplorerProblem?
+    public private(set) var loadingRevisionHistory = false
+    public var supportsRevisionHistory: Bool { source == .wikipediaEnglish && client is any RevisionHistoryClient }
     /// Present only for the offline demo source.
     public let offlineEdit: OfflineRevisionEdit?
     public private(set) var offlineEditPublished = false
@@ -28,6 +33,7 @@ import ExplorerMCP
     private enum Action {
         case search(String), open(Candidate), read(Outline, PartLocation), tour
         case compare(Candidate, Outline, PartLocation?), publishEdit
+        case history(RevisionHistoryInput)
     }
     @ObservationIgnored private var pending: (UInt64, Action)?
     @ObservationIgnored private var generation: UInt64 = 0
@@ -46,10 +52,12 @@ import ExplorerMCP
         guard !q.isEmpty, q.utf8.count <= 256 else {
             cancel(); problem = PublicProblems.project(.invalidArguments); phase = .problem; return
         }
+        clearRevisionHistory()
         candidate = nil; outline = nil; selectedPart = nil; passage = nil; citations = nil; comparison = nil
         enqueue(.search(q), phase: .searching)
     }
     public func open(_ candidate: Candidate) {
+        clearRevisionHistory()
         self.candidate = candidate; outline = nil; selectedPart = nil; passage = nil; citations = nil; comparison = nil
         enqueue(.open(candidate), phase: .opening)
     }
@@ -61,6 +69,21 @@ import ExplorerMCP
         page = nil; candidate = nil; outline = nil; selectedPart = nil; passage = nil; citations = nil; comparison = nil
         enqueue(.tour, phase: .searching)
     }
+    /// Loads one history segment without replacing the pinned article or its citations.
+    /// Older pages are requested explicitly using the last admitted row's ID.
+    public func loadRevisionHistory(older: Bool = false) {
+        guard !closed, !isBusy, supportsRevisionHistory, let candidate, let outline,
+              candidate.pageID == outline.snapshot.pageID else { return }
+        let cursor = older ? revisionHistory?.olderCursor : nil
+        if older && (cursor == nil || revisionHistory?.requestedSnapshot != outline.snapshot) { return }
+        revisionHistoryProblem = nil
+        enqueue(.history(.init(candidateID: candidate.id, snapshot: outline.snapshot, olderThan: cursor)), phase: .comparing, preserveResearchProblems: true)
+    }
+
+    private func clearRevisionHistory() {
+        revisionHistory = nil; revisionHistoryProblem = nil; loadingRevisionHistory = false
+    }
+
     /// Explicitly asks the source for the candidate's current revision and, when it differs,
     /// compares the selected section. The pinned revision stays what the reader shows.
     public func compareWithLatestRevision() {
@@ -72,6 +95,7 @@ import ExplorerMCP
     public func adoptLatestRevision() {
         guard !isBusy, let comparison, !comparison.latestIsPinned, outline?.snapshot == comparison.pinned else { return }
         let part = comparison.partID.flatMap { id in comparison.latest.sections.first { $0.location.partID == id }?.location }
+        clearRevisionHistory()
         outline = comparison.latest; self.comparison = nil
         selectedPart = nil; passage = nil; citations = nil; problem = nil; referenceProblem = nil; phase = .outline
         if let part { read(part) }
@@ -90,23 +114,28 @@ import ExplorerMCP
         enqueue(.read(outline, part), phase: .reading)
     }
     public func back() {
-        cancel(); candidate = nil; outline = nil; passage = nil; citations = nil; selectedPart = nil; comparison = nil
+        cancel(); clearRevisionHistory(); candidate = nil; outline = nil; passage = nil; citations = nil; selectedPart = nil; comparison = nil
         problem = nil; referenceProblem = nil; phase = page == nil ? .idle : .candidates
     }
     public func refreshOutline() { if let candidate { open(candidate) } }
     public func cancel() {
         generation &+= 1; pending = nil; worker?.cancel()
-        if isBusy { phase = .cancelled }
+        let wasHistory = loadingRevisionHistory
+        loadingRevisionHistory = false
+        if wasHistory { phase = restingPhase() }
+        else if isBusy { phase = .cancelled }
     }
     public func waitUntilIdle() async { await driver?.value }
     public func shutdown() async { closed = true; cancel(); await driver?.value }
 
     // One driver, one worker and one replacement, regardless of click rate.
     // Superseded work is cancelled AND joined before the next service operation.
-    private func enqueue(_ action: Action, phase: ResearchPhase) {
+    private func enqueue(_ action: Action, phase: ResearchPhase, preserveResearchProblems: Bool = false) {
         guard !closed else { return }
         generation &+= 1; pending = (generation, action); worker?.cancel()
-        problem = nil; referenceProblem = nil; self.phase = phase
+        if case .history = action { loadingRevisionHistory = true } else { loadingRevisionHistory = false }
+        if !preserveResearchProblems { problem = nil; referenceProblem = nil }
+        self.phase = phase
         guard driver == nil else { return }
         driver = Task { [self] in
             while let (token, action) = pending {
@@ -155,6 +184,22 @@ import ExplorerMCP
                 await record(operation, true)
                 operation = "read_article_section"; selectedPart = part; phase = .reading
                 guard try await readSection(opened, part, token: token) else { return }
+            case .history(let input):
+                operation = "get_article_history"
+                do {
+                    guard let historyClient = client as? any RevisionHistoryClient else { throw source.problem(.unsupportedVariant) }
+                    let result = try await historyClient.history(input)
+                    guard current(token), outline?.snapshot == input.snapshot, candidate?.id == input.candidateID else { return }
+                    guard result.isAdmitted(for: input) else { throw source.problem(.unsupportedVariant) }
+                    revisionHistory = result; loadingRevisionHistory = false; phase = restingPhase()
+                } catch is CancellationError { throw CancellationError() }
+                catch {
+                    guard current(token) else { return }
+                    revisionHistoryProblem = publicProblem(error)
+                    loadingRevisionHistory = false; phase = restingPhase()
+                    await record(operation, false)
+                    return
+                }
             case .compare(let candidate, let pinned, let part):
                 operation = "get_article_outline"
                 let latest = try await client.outline(.init(project: candidate.project, candidateID: candidate.id))
@@ -181,7 +226,11 @@ import ExplorerMCP
             }
             if !operation.isEmpty { await record(operation, true) }
         } catch is CancellationError {
-            if token == generation, !closed { phase = .cancelled }
+            if token == generation, !closed {
+                let wasHistory = loadingRevisionHistory
+                loadingRevisionHistory = false
+                phase = wasHistory ? restingPhase() : .cancelled
+            }
             if !operation.isEmpty { await record(operation, false) }
         } catch {
             guard current(token) else { return }

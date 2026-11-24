@@ -10,7 +10,12 @@ public protocol ResearchClient: Sendable {
     func section(_ input: SectionInput) async throws -> SectionPassage
     func references(_ input: ReferencesInput) async throws -> SectionReferences
 }
-extension ExplorerService: ResearchClient {}
+/// Optional history capability. Only the direct service implements it in R4a;
+/// an MCP reader never falls through to a direct network request.
+public protocol RevisionHistoryClient: ResearchClient {
+    func history(_ input: RevisionHistoryInput) async throws -> RevisionHistoryPage
+}
+extension ExplorerService: RevisionHistoryClient {}
 /// The same research operations over a real MCP connection (HTTP or stdio).
 extension MCPResearchClient: ResearchClient {}
 

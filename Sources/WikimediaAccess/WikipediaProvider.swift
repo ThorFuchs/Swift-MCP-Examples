@@ -4,7 +4,7 @@ import ExplorerDomain
 
 /// Two provider operations at most. No startup request, implicit cache refresh,
 /// crawl, latest-page substitution or fixture fallback.
-public actor WikipediaProvider: ExplorerProvider {
+public actor WikipediaProvider: ExplorerProvider, RevisionHistoryProvider {
     public nonisolated let profile = SourceProfile.wikipediaEnglish
     private struct Mapping { let candidate: Candidate; let key: String; let expires: Date; let bytes: Int }
     private let transport: any LiveTransport
@@ -65,6 +65,37 @@ public actor WikipediaProvider: ExplorerProvider {
             return CandidateResolution(candidate: mapping.candidate, liveSnapshot: snapshot)
         } catch { throw sanitized(error) }
     }
+    /// Explicit bounded history request for the previously admitted candidate.
+    /// No article revision or pagination URL is fetched by this operation.
+    public func history(_ input: RevisionHistoryInput) async throws -> RevisionHistoryPage {
+        let deadline = try admit(input.snapshot.project)
+        defer { inFlight -= 1 }
+        expire()
+        guard profile.admits(input.snapshot),
+              let mapping = mappings[input.candidateID],
+              mapping.candidate.pageID == input.snapshot.pageID,
+              input.olderThan.map(RevisionHistoryEntry.isRevisionID) ?? true else {
+            throw profile.problem(.unknownCandidate)
+        }
+        do {
+            let url = try WikipediaRoute.history(mapping.key, olderThan: input.olderThan)
+            let response = try await response(url, deadline: deadline)
+            let decoded = try RESTCodec.decode(RESTHistory.self, response.body)
+            guard decoded.revisions.count <= RevisionHistoryPage.maximumEntries else { throw LiveFailure.malformed }
+            let rows = decoded.revisions.map {
+                RevisionHistoryEntry(revisionID: String($0.id), timestamp: $0.timestamp,
+                                     size: $0.size, delta: $0.delta, minor: $0.minor)
+            }
+            let result = RevisionHistoryPage(requestedSnapshot: input.snapshot, requestedTitle: mapping.candidate.title,
+                entries: rows, hasOlder: decoded.older.map { !$0.isEmpty } ?? false)
+            guard result.isAdmitted(for: input) else { throw LiveFailure.malformed }
+            try finish(deadline)
+            guard let stillCurrent = mappings[input.candidateID], stillCurrent.expires > now(),
+                  stillCurrent.key == mapping.key else { throw profile.problem(.unknownCandidate) }
+            return result
+        } catch { throw sanitized(error) }
+    }
+
     private func response(_ url: URL, deadline: ContinuousClock.Instant) async throws -> LiveHTTPResponse {
         for attempt in 0..<2 {
             try finish(deadline)

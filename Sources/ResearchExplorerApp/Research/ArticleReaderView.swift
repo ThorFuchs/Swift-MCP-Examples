@@ -172,7 +172,7 @@ struct ReadingPane: View {
         switch presentation.status {
         case .readingSection: ProgressView("Reading section…").controlSize(.small)
         case .loadingReferences: ProgressView("Loading references…").controlSize(.small)
-        case .comparing: ProgressView("Checking for a newer revision…").controlSize(.small)
+        case .comparing: ProgressView(model.loadingRevisionHistory ? "Loading revision history…" : "Checking for a newer revision…").controlSize(.small)
         case .cancelled: Label("Stopped. The pinned revision is unchanged; choose a section to continue.", systemImage: "stop.circle").foregroundStyle(.secondary)
         default: EmptyView()
         }
@@ -286,6 +286,10 @@ struct RevisionPanel: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 if let comparison = model.comparison { result(comparison) }
+                if model.source == .wikipediaEnglish {
+                    Divider()
+                    RevisionHistoryView(model: model, outline: outline)
+                }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
         } label: { Label("Revision", systemImage: "clock.arrow.circlepath") }
     }
