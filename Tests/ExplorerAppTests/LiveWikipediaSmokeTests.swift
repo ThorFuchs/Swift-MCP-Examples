@@ -1,0 +1,175 @@
+// SPDX-License-Identifier: Apache-2.0
+import Foundation
+import Testing
+import ExplorerDomain
+import WikimediaAccess
+import ExplorerPresentation
+@testable import ResearchExplorerApp
+
+/// Explicit, network-dependent acceptance for the production Wikipedia provider.
+/// Uses the normal app source loader and real SDK host, with an ephemeral local
+/// port. No replay transport, fixture fallback, external citation fetch, or
+/// assertions about a specific mutable revision number.
+@Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["RE_LIVE_WIKIPEDIA"] == "1",
+                             "Opt in to the real public Wikipedia REST API"))
+@MainActor struct LiveWikipediaSmokeTests {
+    private let query = "Noether's theorem"
+
+    private func withLiveApp(_ body: @MainActor (AppLifetime) async throws -> Void) async throws {
+        let app = AppLifetime(makeHost: { service, activity, id in
+            SDKHTTPHost(service: service, activity: activity, runID: id,
+                        configuration: try LocalEndpoint(port: 0))
+        })
+        app.prepare()
+        await app.waitUntilPrepared()
+        do {
+            try #require(app.profile == .offlineDemo)
+            try #require(app.server?.phase == .stopped)
+            try #require(app.canSwitchSource)
+            app.selectSource(.wikipediaEnglish)
+            await app.waitUntilPrepared()
+            try #require(app.profile == .wikipediaEnglish)
+            try #require(app.server?.phase == .stopped)
+            try #require(app.server?.endpoint == nil)
+            let reader = try #require(app.research)
+            try #require(reader.source == .wikipediaEnglish)
+            try #require(reader.page == nil && reader.outline == nil && reader.offlineEdit == nil)
+            print("LIVE_WIKI source=WikipediaEnglish initial_listener=none")
+            try await body(app)
+        } catch {
+            #expect(await app.quit(waitMilliseconds: 10_000))
+            throw error
+        }
+        try #require(await app.quit(waitMilliseconds: 10_000))
+    }
+
+    private func checkOutline(_ outline: Outline, candidatePage: String? = nil) throws {
+        let id = outline.snapshot
+        try #require(id.project == "enwiki" && id.provider == "mediawiki-rest")
+        try #require(SourceProfile.wikipediaEnglish.admits(id))
+        try #require((Int64(id.pageID) ?? 0) > 0 && (Int64(id.revisionID) ?? 0) > 0)
+        if let candidatePage { try #require(id.pageID == candidatePage) }
+        try #require(outline.provenance.identity == id && !outline.provenance.synthetic)
+        try #require(outline.provenance.language == "en")
+        try #require(!outline.provenance.license.isEmpty && !outline.provenance.retrievedAt.isEmpty)
+        let link = try #require(URLComponents(string: outline.provenance.sourceURL))
+        try #require(link.scheme == "https" && link.host == "en.wikipedia.org")
+        try #require(link.queryItems?.contains { $0.name == "oldid" && $0.value == id.revisionID } == true)
+        try #require(!outline.sections.isEmpty)
+        try #require(outline.sections.allSatisfy { $0.location.snapshot == id })
+    }
+
+    private func checkPassage(_ passage: SectionPassage, outline: Outline, maximumBytes: Int) throws {
+        try #require(passage.snapshot == outline.snapshot && passage.provenance.identity == outline.snapshot)
+        try #require(!passage.provenance.synthetic && passage.textAvailable)
+        try #require(!passage.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        try #require(passage.text.utf8.count <= maximumBytes)
+        try #require(outline.sections.contains { $0.location.partID == passage.selectedPartID })
+    }
+
+    private func checkReferences(_ references: SectionReferences, outline: Outline) throws {
+        try #require(references.snapshot == outline.snapshot && references.provenance.identity == outline.snapshot)
+        try #require(!references.provenance.synthetic && !references.independentlyVerified)
+        try #require(references.references.allSatisfy { !$0.synthetic })
+        try #require(references.references.count <= 20 && references.associations.count <= 64)
+    }
+
+    /// The same ResearchController used by the actual reader; no MCP listener is
+    /// involved. Resolve the returned candidate, then read the pinned snapshot.
+    @Test func directReaderUsesRealWikipedia() async throws {
+        try await withLiveApp { app in
+            let reader = try #require(app.research)
+            print("LIVE_WIKI direct stage=search")
+            reader.query = self.query
+            reader.search()
+            await reader.waitUntilIdle()
+            if let problem = reader.problem { print("LIVE_WIKI direct problem=\(problem.code.rawValue)") }
+            try #require(reader.problem == nil)
+            let page = try #require(reader.page)
+            try #require(page.provider == "mediawiki-rest")
+            let candidate = try #require(page.candidates.first {
+                $0.title.caseInsensitiveCompare(self.query) == .orderedSame
+            }, "Expected the exact article among the returned candidates; no fixture fallback")
+            print("LIVE_WIKI direct stage=outline page=\(candidate.pageID) candidates=\(page.candidates.count)")
+            reader.open(candidate)
+            await reader.waitUntilIdle()
+            if let problem = reader.problem { print("LIVE_WIKI direct problem=\(problem.code.rawValue)") }
+            try #require(reader.problem == nil)
+            let outline = try #require(reader.outline)
+            try self.checkOutline(outline, candidatePage: candidate.pageID)
+            try #require(reader.presentation.permalink != nil)
+            print("LIVE_WIKI direct stage=section revision=\(outline.snapshot.revisionID) sections=\(outline.sections.count)")
+            let part = try #require(outline.sections.first?.location)
+            reader.read(part)
+            await reader.waitUntilIdle()
+            if let problem = reader.problem { print("LIVE_WIKI direct problem=\(problem.code.rawValue)") }
+            if let problem = reader.referenceProblem { print("LIVE_WIKI direct references_problem=\(problem.code.rawValue)") }
+            try #require(reader.problem == nil && reader.referenceProblem == nil)
+            let passage = try #require(reader.passage)
+            let references = try #require(reader.citations)
+            try self.checkPassage(passage, outline: outline, maximumBytes: 32768)
+            try #require(passage.selectedPartID == part.partID)
+            try self.checkReferences(references, outline: outline)
+            // Reference metadata must be present; an uncited section is legal.
+            try #require(app.server?.phase == .stopped && app.server?.endpoint == nil)
+            let observation = await app.activity.snapshot()
+            try #require(!observation.metricsAvailable)
+            print("LIVE_WIKI direct verified revision=\(outline.snapshot.revisionID) text_bytes=\(passage.text.utf8.count) refs=\(references.references.count) unresolved=\(references.unresolvedIDs.count)")
+        }
+        print("LIVE_WIKI DIRECT PASS joined=true")
+    }
+
+    /// The built-in Explore MCP action uses the public SDK client and its real
+    /// loopback HTTP transport, backed by the same selected live service.
+    @Test func guidedMCPUsesRealWikipedia() async throws {
+        try await withLiveApp { app in
+            print("LIVE_WIKI mcp stage=host_start")
+            app.startServer()
+            let deadline = ContinuousClock.now.advanced(by: .seconds(120))
+            while app.server?.phase != .running {
+                if app.server?.phase == .failed {
+                    print("LIVE_WIKI mcp host_failure=\(app.server?.failure?.rawValue ?? "unknown")")
+                }
+                try #require(ContinuousClock.now < deadline && app.server?.phase != .failed)
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            let run = try #require(app.server?.runID)
+            try #require(app.server?.endpoint?.host == "127.0.0.1")
+            app.journey.setInspectExchanges(true)
+            print("LIVE_WIKI mcp stage=guided_journey")
+            app.exploreMCP()
+            await app.journey.waitUntilFinished()
+            for step in app.journey.steps {
+                // Only the controller's owned method/tool/outcome metadata.
+                print("LIVE_WIKI mcp step=\(step.method) tool=\(step.tool ?? "-") status=\(step.status.rawValue) ms=\(step.milliseconds)")
+            }
+            if let problem = app.journey.problem { print("LIVE_WIKI mcp problem=\(problem.code.rawValue)") }
+            if let failure = app.journey.steps.last?.failure {
+                print("LIVE_WIKI mcp owned_failure=\(failure)")
+            }
+            try #require(app.journey.phase == .completed)
+            try #require(app.journeyOwnerRunID == run && !app.journey.isRunning)
+            let steps = app.journey.steps
+            try #require(steps.count == 5 && steps.allSatisfy { $0.status == .succeeded && $0.validated })
+            let exchanges = app.journey.exchanges
+            try #require(exchanges.count >= 6 && exchanges.count <= 32 && app.journey.droppedExchanges == 0)
+            try #require(exchanges.first?.method == "server/discover")
+            try #require(exchanges.contains { $0.method == "tools/list" })
+            try #require(exchanges.filter { $0.method == "tools/call" }.compactMap(\.tool) ==
+                         ["search_articles", "get_article_outline", "read_article_section", "get_section_references"])
+            try #require(exchanges.allSatisfy { $0.outcome == .response })
+            let outline = try #require(app.journey.outline)
+            let passage = try #require(app.journey.passage)
+            let references = try #require(app.journey.references)
+            try self.checkOutline(outline)
+            try self.checkPassage(passage, outline: outline, maximumBytes: 4096)
+            try self.checkReferences(references, outline: outline)
+            let observation = await app.activity.snapshot()
+            try #require(observation.runID == run && observation.active == 0)
+            try #require(observation.completed == 4 && observation.failed == 0 && observation.cancelled == 0)
+            try #require(!observation.metricsPartial)
+            print("LIVE_WIKI mcp verified page=\(outline.snapshot.pageID) revision=\(outline.snapshot.revisionID) exchanges=\(exchanges.count) terminal_handlers=\(observation.completed) text_bytes=\(passage.text.utf8.count) refs=\(references.references.count) unresolved=\(references.unresolvedIDs.count)")
+        }
+        print("LIVE_WIKI MCP PASS joined=true")
+    }
+}
