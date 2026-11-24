@@ -21,6 +21,9 @@ struct PreparedSource: Sendable {
     var canSwitchSource: Bool { !isQuitting && !termination.unsettled && bootstrap == nil && server?.phase == .stopped && server?.cleanupDebt == false && !journey.isRunning }
     /// The guided "Explore MCP" client journey against this app's own running server.
     let journey = MCPJourneyController()
+    /// Presentation identity only. The SDK controller still owns its task.
+    private(set) var journeyOwnerRunID: UUID?
+    private(set) var journeyVisualID = UUID()
     let activity: ActivityStore
     var activitySnapshot = ActivitySnapshot.empty
     private(set) var server: ServerController?
@@ -112,7 +115,9 @@ struct PreparedSource: Sendable {
     /// server drain closes any remaining exchange).
     func stopServer() { journey.cancel(); server?.stop() }
     func exploreMCP() {
-        guard !isQuitting, !termination.unsettled else { return }
+        guard !isQuitting, !termination.unsettled, !journey.isRunning else { return }
+        journeyVisualID = UUID()
+        journeyOwnerRunID = server?.phase == .running && server?.endpoint != nil ? server?.runID : nil
         journey.start(endpoint: server?.endpoint, running: server?.phase == .running, source: profile)
     }
     func selectSource(_ profile: SourceProfile) {

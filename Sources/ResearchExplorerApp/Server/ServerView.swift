@@ -171,71 +171,143 @@ struct ServerView: View {
     }
 }
 
-/// "Explore MCP": a real public-SDK client (Client + HTTPClientTransport) calls this app's own
-/// loopback server. Only metadata is shown in the timeline; the tool calls appear in Activity.
+/// The guided client remains owned by MCPJourneyController. This view projects
+/// actual milestones and opt-in exchanges; no additional MCP request is made.
 struct MCPJourneyView: View {
     @Bindable var lifetime: AppLifetime
     let journey: MCPJourneyController
     let running: Bool
+    @State private var showObservations = false
+
+    private var projection: MachineRoomJourneyProjection {
+        MachineRoomJourneyProjection(
+            currentRunID: lifetime.server?.runID,
+            journeyRunID: lifetime.journeyOwnerRunID,
+            phase: journey.phase,
+            steps: journey.steps,
+            inspectionEnabled: journey.inspectExchanges,
+            records: journey.exchanges,
+            dropped: journey.droppedExchanges
+        )
+    }
+
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("A real MCP client in this app connects to the server above over loopback HTTP: server/discover, tools/list, then the four tools. Results are checked against each tool's outputSchema and the requested revision. Nothing is sent until you press Explore MCP.")
-                    .font(.callout).foregroundStyle(.secondary)
-                HStack {
-                    if journey.isRunning {
-                        Button("Cancel", systemImage: "xmark") { journey.cancel() }
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Button("Explore MCP", systemImage: "arrow.left.arrow.right") { lifetime.exploreMCP() }
-                            .buttonStyle(.glassProminent)
-                            .disabled(!running)
-                            .help(running ? "Runs one guided client journey." : "Start the server first; the journey never starts it.")
+        let presentation = projection
+        VStack(alignment: .leading, spacing: ExplorerDesign.Space.md) {
+            ExplorerPanel {
+                VStack(alignment: .leading, spacing: ExplorerDesign.Space.md) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Client ↔ Server")
+                            .font(ExplorerDesign.Typography.section)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer(minLength: ExplorerDesign.Space.xs)
+                        ExplorerPill(
+                            title: presentation.phase?.rawValue ?? (journey.isRunning ? "Previous journey settling" : "Ready"),
+                            symbol: presentation.phase == .completed ? "checkmark.circle" : presentation.phase == .failed ? "exclamationmark.triangle" : "arrow.left.arrow.right",
+                            tone: presentation.phase == .failed ? .caution : presentation.phase == .running ? .accent : .neutral
+                        )
                     }
-                    Toggle("Record exchange details", isOn: Binding(get: { journey.inspectExchanges }, set: { journey.setInspectExchanges($0) }))
-                        .disabled(journey.isRunning)
-                        .help("Opt-in for the next run: method, tool, byte counts, messages and timing of each real SDK exchange. Kept in memory for this server run only; never exported.")
-                    Spacer()
-                    Text(journey.phase.rawValue).foregroundStyle(.secondary)
-                }
-                if !journey.steps.isEmpty {
-                    Table(journey.steps) {
-                        TableColumn("Method") { Text($0.method).font(.callout.monospaced()) }
-                        TableColumn("Tool") { Text($0.tool ?? "—").font(.callout.monospaced()) }
-                        TableColumn("Status") { step in Text(step.status.rawValue) }
-                        TableColumn("Validated") { step in Text(step.validated ? "Schema + identity" : "No") }
-                        TableColumn("Revision") { step in Text(step.revisionID ?? "—") }
-                        TableColumn("Duration") { step in Text("\(step.milliseconds) ms").monospacedDigit() }
-                    }.frame(minHeight: 170)
-                    ForEach(journey.steps.compactMap(\.failure), id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
-                }
-                if !journey.exchanges.isEmpty {
-                    Text("Exchange inspector · \(journey.exchanges.count) real SDK exchanges\(journey.droppedExchanges > 0 ? " · \(journey.droppedExchanges) not retained" : "")")
-                        .font(.headline)
-                    Table(journey.exchanges) {
-                        TableColumn("#") { Text("\($0.id + 1)").monospacedDigit() }.width(28)
-                        TableColumn("Method") { Text($0.method).font(.callout.monospaced()) }
-                        TableColumn("Tool") { Text($0.tool ?? "—").font(.callout.monospaced()) }
-                        TableColumn("Sent") { Text("\($0.requestBytes) B").monospacedDigit() }
-                        TableColumn("Received") { record in Text("\(record.responseBytes) B in \(record.messages) message\(record.messages == 1 ? "" : "s")").monospacedDigit() }
-                        TableColumn("Outcome") { Text($0.outcome.rawValue) }
-                        TableColumn("Duration") { Text("\($0.milliseconds) ms").monospacedDigit() }
-                    }.frame(minHeight: 200)
-                    Text("Sizes and metadata only: no bodies, arguments, header values or error text are kept. One stateless POST per request; no initialize, no session.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let outline = journey.outline {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(outline.provenance.title).font(.headline)
-                        Text("Revision \(outline.snapshot.revisionID) · \(outline.snapshot.provider) · \(outline.provenance.synthetic ? "fictional" : "fetched snapshot")").font(.caption).foregroundStyle(.secondary)
-                        if let passage = journey.passage { Text(passage.text).lineLimit(6).textSelection(.enabled) }
-                        if let refs = journey.references { Text("\(refs.references.count) references, \(refs.unresolvedIDs.count) unresolved · not independently verified").font(.caption).foregroundStyle(.secondary) }
+                    Text("A genuine public-SDK client talks to this app's explicitly started loopback HTTP server. No requests are sent until you press Explore MCP.")
+                        .font(ExplorerDesign.Typography.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: ExplorerDesign.Space.md) { controls }
+                            .fixedSize(horizontal: true, vertical: false)
+                        VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) { controls }
+                    }
+                    HStack(spacing: ExplorerDesign.Space.sm) {
+                        Label("MCPClient", systemImage: "macwindow")
+                            .font(ExplorerDesign.Typography.panel)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.left.arrow.right")
+                            .foregroundStyle(ExplorerDesign.Palette.accent)
+                            .accessibilityHidden(true)
+                        Spacer(minLength: 0)
+                        Label("MCPServer", systemImage: "server.rack")
+                            .font(ExplorerDesign.Typography.panel)
+                    }
+                    .padding(ExplorerDesign.Space.sm)
+                    .background(ExplorerDesign.Palette.control, in: RoundedRectangle(cornerRadius: ExplorerDesign.Radius.small))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("MCP client and loopback HTTP server")
+                    Text("Planned milestones · actual recorded outcomes")
+                        .font(ExplorerDesign.Typography.detail)
+                        .foregroundStyle(.secondary)
+                    JourneyMilestoneRail(projection: presentation)
+                    if !presentation.steps.isEmpty {
+                        DisclosureGroup("Recorded milestone details (\(presentation.steps.count))", isExpanded: $showObservations) {
+                            VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) {
+                                ForEach(presentation.steps) { step in
+                                    VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
+                                        Text(step.tool ?? step.method).font(ExplorerDesign.Typography.mono)
+                                            .textSelection(.enabled)
+                                        Text("\(step.status.rawValue) · \(step.milliseconds >= 0 ? "\(step.milliseconds) ms" : "Duration unavailable")")
+                                            .font(ExplorerDesign.Typography.detail)
+                                            .foregroundStyle(.secondary)
+                                        if let revision = step.revisionID {
+                                            Text("Revision \(revision)").font(ExplorerDesign.Typography.detail)
+                                        }
+                                        if let failure = step.failure {
+                                            Label(failure, systemImage: "exclamationmark.triangle")
+                                                .font(ExplorerDesign.Typography.detail)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Divider()
+                                }
+                            }
+                            .padding(.top, ExplorerDesign.Space.sm)
+                        }
                     }
                 }
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-        } label: {
-            Label("Guided MCP journey", systemImage: "point.3.connected.trianglepath.dotted")
-                .font(ExplorerDesign.Typography.panel)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if presentation.inspectionEnabled {
+                JourneyExchangeCharts(projection: presentation)
+                    .id(lifetime.journeyVisualID)
+            }
+            if presentation.isCurrent, let outline = journey.outline {
+                ExplorerPanel {
+                    VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) {
+                        Text("Research result").font(ExplorerDesign.Typography.panel)
+                            .accessibilityAddTraits(.isHeader)
+                        Text(outline.provenance.title).font(ExplorerDesign.Typography.section)
+                        Text("Revision \(outline.snapshot.revisionID) · \(outline.snapshot.provider) · \(outline.provenance.synthetic ? "fictional" : "fetched snapshot")")
+                            .font(ExplorerDesign.Typography.detail)
+                            .foregroundStyle(.secondary)
+                        if let passage = journey.passage {
+                            Text(passage.text).lineLimit(6).textSelection(.enabled)
+                        }
+                        if let refs = journey.references {
+                            Text("\(refs.references.count) references, \(refs.unresolvedIDs.count) unresolved · not independently verified")
+                                .font(ExplorerDesign.Typography.detail)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
+        .onChange(of: lifetime.journeyVisualID) { showObservations = false }
+        .onChange(of: lifetime.server?.runID) { showObservations = false }
+    }
+
+    @ViewBuilder private var controls: some View {
+        if journey.isRunning {
+            HStack(spacing: ExplorerDesign.Space.xs) {
+                Button("Cancel", systemImage: "xmark") { journey.cancel() }
+                ProgressView().controlSize(.small)
+                    .accessibilityLabel("Client journey running")
+            }
+        } else {
+            Button("Explore MCP", systemImage: "arrow.left.arrow.right") { lifetime.exploreMCP() }
+                .buttonStyle(.glassProminent)
+                .disabled(!running)
+                .help(running ? "Runs one guided client journey." : "Start the server first; the journey never starts it.")
+        }
+        Toggle("Record exchange details", isOn: Binding(get: { journey.inspectExchanges }, set: { journey.setInspectExchanges($0) }))
+            .disabled(journey.isRunning)
+            .help("Opt in before starting a journey. Turning this off hides exchange metadata; existing retained records are cleared by the next journey or the existing clear lifecycle.")
     }
 }
