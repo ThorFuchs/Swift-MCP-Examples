@@ -33,9 +33,10 @@ export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
 # Separate runs so a direct-reader failure does not conceal the MCP or R1–R3 results.
 # Each uses the real public provider. There is no auto-retry beyond its policy.
 status=0
-for mode in directReaderUsesRealWikipedia guidedMCPUsesRealWikipedia interactiveLiveResearchCollectsEvidence; do
+for mode in directReaderUsesRealWikipedia guidedMCPUsesRealWikipedia interactiveLiveResearchCollectsEvidence directReaderExploresRevisionHistory; do
   case "$mode" in
-    direct*) marker="LIVE_WIKI DIRECT PASS joined=true";;
+    directReaderUsesRealWikipedia) marker="LIVE_WIKI DIRECT PASS joined=true";;
+    directReaderExploresRevisionHistory) marker="LIVE_WIKI HISTORY PASS joined=true";;
     guided*) marker="LIVE_WIKI MCP PASS joined=true";;
     interactive*) marker="LIVE_WIKI INTERACTIVE PASS joined=true";;
   esac
@@ -62,4 +63,4 @@ if (( status != 0 )); then
   echo "Live qualification did not pass. Keep exact failure evidence; do not relax HTML/identity admission."
   exit 1
 fi
-echo "PASS: direct reader, guided HTTP MCP and interactive R1–R3 Wikipedia journey; all joined."
+echo "PASS: direct reader, guided HTTP MCP, interactive R1–R3 and R4a revision history; all joined."

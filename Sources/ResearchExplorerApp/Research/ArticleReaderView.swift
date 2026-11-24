@@ -301,7 +301,11 @@ struct RevisionPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Revision \(latest) is available\(comparison.latest.provenance.modifiedAt.map { " (edited \($0))" } ?? ""). You are still reading \(pinned).", systemImage: "exclamationmark.arrow.circlepath")
                 switch comparison.passage {
-                case .notCompared: Text("Choose a section, then check again to compare its text.").foregroundStyle(.secondary)
+                case .notCompared:
+                    Text(model.source == .wikipediaEnglish
+                         ? "Live section IDs are revision-local. Switch to the new revision and choose its section independently."
+                         : "Choose a section, then check again to compare its text.")
+                        .foregroundStyle(.secondary)
                 case .unchanged: Text("The selected section is identical in \(latest).").foregroundStyle(.secondary)
                 case .absentInLatest: Text("The selected section does not exist in \(latest).").foregroundStyle(.secondary)
                 case .changed(let old, let new):

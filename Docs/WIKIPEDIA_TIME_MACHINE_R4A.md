@@ -16,3 +16,9 @@ Scope: the first native Time Machine slice, based on R1–R3 at `124fcb573784914
 Qualify actual revision/{id}/with_html responses on the native host. Their revision envelope differs from page/with_html; require exact revision/page identity, supported content model, HTML profile and honest license provenance before normalizing. Historical sections must be selected independently; ordinal section IDs do not establish correspondence across live revisions. The full native old-revision reader and compare remain open. R5 MCP Resources follows after that admission contract is reviewed.
 
 Reference: https://www.mediawiki.org/wiki/API:REST_API/Reference#History
+
+## Qualification
+
+Run `swift test --filter LiveProviderTests` and `swift test --filter RevisionHistoryTests` for deterministic route/admission coverage. Run `bash Scripts/qualify-live-wikipedia-local.sh` for four explicit live smoke cases, including `directReaderExploresRevisionHistory`. The new case validates the real public history endpoint, older pagination if present, unchanged pinned content and citations, a direct Activity event, no local listener, and joined quit. Previous receipts do not qualify this commit.
+
+Live latest-revision comparison deliberately no longer equates ordinal part IDs across different Wikipedia revisions. The offline teaching fixture retains its existing stable-ID comparison. The user explicitly chooses the section of the newly adopted live revision.

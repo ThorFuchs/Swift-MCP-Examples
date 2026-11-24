@@ -105,6 +105,62 @@ private func html(_ content: String, revision: Int = 22, version: String = "2.8.
         #expect(passage.text.contains("child"))
     }
 
+
+    @Test func historyUsesOnlyAdmittedCandidateAndNumericCursor() async throws {
+        let wire = #"{"revisions":[{"id":22,"timestamp":"2026-10-21T00:00:00Z","size":100,"delta":-5,"minor":true,"user":{"name":"not retained"},"comment":"not retained"},{"id":21,"timestamp":"2026-10-20T00:00:00Z","size":105,"delta":null,"minor":false}],"older":"https://evil.example/never-follow"}"#
+        let older = #"{"revisions":[{"id":20,"timestamp":"2026-10-19T00:00:00Z","size":90,"delta":null,"minor":false}]}"#
+        let transport = ReplayTransport([response(searchWire), response(wire), response(older)])
+        let provider = WikipediaProvider(transport: transport)
+        let candidate = try #require(try await provider.search(query: "Test", project: "enwiki", limit: 1).candidates.first)
+        let snapshot = SnapshotID(provider: "mediawiki-rest", project: "enwiki", pageID: "11", revisionID: "22", normalizerVersion: "mediawiki-html-1")
+        let input = RevisionHistoryInput(candidateID: candidate.id, snapshot: snapshot)
+        let page = try await provider.history(input)
+        #expect(page.entries.map(\.revisionID) == ["22", "21"] && page.olderCursor == "21")
+        #expect(page.entries[0].delta == -5 && page.entries[1].delta == nil && page.entries[0].minor)
+        #expect(page.requestedSnapshot == snapshot)
+        let next = try await provider.history(.init(candidateID: candidate.id, snapshot: snapshot, olderThan: page.olderCursor))
+        #expect(next.entries.map(\.revisionID) == ["20"] && next.olderCursor == nil)
+        let urls = await transport.urls
+        #expect(urls.count == 3)
+        #expect(urls[1] == (try WikipediaRoute.history("Test/Page%?#é")))
+        #expect(urls[2] == (try WikipediaRoute.history("Test/Page%?#é", olderThan: "21")))
+        #expect(urls.allSatisfy { $0.host == "en.wikipedia.org" })
+        await #expect(throws: ExplorerProblem.self) {
+            try await provider.history(.init(candidateID: "unknown", snapshot: snapshot))
+        }
+        #expect(await transport.count == 3)
+    }
+
+    @Test func historyRejectsMalformedSegmentsAndRoutes() async throws {
+        let id = SnapshotID(provider: "mediawiki-rest", project: "enwiki", pageID: "11", revisionID: "22", normalizerVersion: "mediawiki-html-1")
+        for body in [
+            #"{"revisions":[{"id":22,"timestamp":"invalid","size":100,"minor":false}]}"#,
+            #"{"revisions":[{"id":0,"timestamp":"2026-10-21T00:00:00Z","size":100,"minor":false}]}"#,
+            #"{"revisions":[],"older":"anything"}"#,
+            #"{"revisions":[{"id":22,"timestamp":"2026-10-21T00:00:00Z","size":-1,"minor":false}]}"#,
+            #"{"revisions":[{"id":22,"timestamp":"2026-10-21T00:00:00Z","size":100,"minor":false},{"id":22,"timestamp":"2026-10-21T00:00:00Z","size":100,"minor":false}]}"#
+        ] {
+            let transport = ReplayTransport([response(searchWire), response(body)])
+            let provider = WikipediaProvider(transport: transport)
+            let candidate = try #require(try await provider.search(query: "Test", project: "enwiki", limit: 1).candidates.first)
+            await #expect(throws: ExplorerProblem.self) {
+                try await provider.history(.init(candidateID: candidate.id, snapshot: id))
+            }
+            #expect(await transport.count == 2)
+        }
+        #expect(throws: LiveFailure.self) { try WikipediaRoute.history("Test", olderThan: "0") }
+        #expect(throws: LiveFailure.self) { try WikipediaRoute.history("Test", olderThan: "9223372036854775808") }
+        let good = try WikipediaRoute.history("Test", olderThan: "21")
+        #expect(WikipediaRoute.allowed(good))
+        for bad in ["https://en.wikipedia.org/w/rest.php/v1/page/Test/history?older_than=21&newer_than=22",
+                    "https://en.wikipedia.org/w/rest.php/v1/page/Test/history?older_than=0",
+                    "https://en.wikipedia.org/w/rest.php/v1/page/Test/history?filter=bot",
+                    "https://en.wikipedia.org.evil/w/rest.php/v1/page/Test/history",
+                    "https://en.wikipedia.org/w/rest.php/v1/page/Test/Other/history"] {
+            #expect(!WikipediaRoute.allowed(URL(string: bad)!))
+        }
+    }
+
     @Test func versionAndRevisionConflictsAreDenied() async throws {
         let normalizer = MediaWikiNormalizer()
         for raw in [html("<section data-mw-section-id='0'>x</section>", revision: 23), html("<section data-mw-section-id='0'>x</section>", version: "9.0.0")] {

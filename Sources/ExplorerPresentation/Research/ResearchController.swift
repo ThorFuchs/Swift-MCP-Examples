@@ -205,7 +205,9 @@ import ExplorerMCP
                 let latest = try await client.outline(.init(project: candidate.project, candidateID: candidate.id))
                 guard current(token) else { return }
                 var passage = RevisionComparison.Passage.notCompared
-                if let part, latest.snapshot != pinned.snapshot {
+                // Live normalizer part IDs are ordinals within a revision.
+                // They cannot establish semantic section correspondence across revisions.
+                if source == .offlineDemo, let part, latest.snapshot != pinned.snapshot {
                     await record(operation, true)
                     operation = "read_article_section"
                     // Re-read the pinned text from its own snapshot: an expired pin is reported, not replaced.
@@ -216,7 +218,8 @@ import ExplorerMCP
                     } else { passage = .absentInLatest }
                 }
                 guard current(token), outline?.snapshot == pinned.snapshot, selectedPart == part else { return }
-                comparison = .init(pinned: pinned.snapshot, latest: latest, partID: part?.partID, passage: passage)
+                comparison = .init(pinned: pinned.snapshot, latest: latest,
+                                   partID: source == .offlineDemo ? part?.partID : nil, passage: passage)
                 phase = restingPhase()
             case .publishEdit:
                 await offlineEdit?.publish()
