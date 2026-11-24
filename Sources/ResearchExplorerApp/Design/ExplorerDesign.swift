@@ -75,7 +75,7 @@ enum ExplorerDesign {
 /// The system owns glass effects on window chrome, sidebars and controls.
 struct ExplorerPanel<Content: View>: View {
     private let content: Content
-    init(@ViewBuilder content: () -> Content) { self.content = content }
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
 
     var body: some View {
         content
