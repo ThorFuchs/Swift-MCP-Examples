@@ -107,7 +107,7 @@ struct ServerView: View {
             Button("Stop server", systemImage: "stop.fill") { lifetime.stopServer() }
                 .disabled(!server.canStop)
         }
-        Button("Restart") { server.restart() }.disabled(server.phase != .running)
+        Button("Restart") { lifetime.restartServer() }.disabled(server.phase != .running)
         Button("Copy endpoint", systemImage: "doc.on.doc") {
             if let endpoint = server.endpoint {
                 NSPasteboard.general.clearContents()

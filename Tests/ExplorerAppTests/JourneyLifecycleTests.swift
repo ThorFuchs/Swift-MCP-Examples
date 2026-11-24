@@ -28,6 +28,43 @@ import ExplorerPresentation
     }
     private enum LifecycleFailure: Error { case phase(String) }
 
+    @Test func interactiveReaderUsesRealMCPAndDoesNotCountDirectResearch() async throws {
+        let app = try app()
+        app.prepare(); await app.waitUntilPrepared()
+        do {
+            #expect(app.researchMode == .direct)
+            app.selectResearchMode(.mcp)
+            #expect(app.researchMode == .direct && app.server?.phase == .stopped)
+            app.startServer(); try await waitPhase(app, .running)
+            app.selectResearchMode(.mcp); await app.waitUntilPrepared()
+            try #require(app.researchMode == .mcp && app.researchRouteReady)
+            let run = try #require(app.server?.runID)
+            let reader = try #require(app.research)
+            reader.query = OfflineTour.query
+            reader.search(); await reader.waitUntilIdle()
+            let candidate = try #require(reader.page?.candidates.first { $0.id == OfflineTour.candidateID })
+            reader.open(candidate); await reader.waitUntilIdle()
+            let outline = try #require(reader.outline)
+            let part = try #require(outline.sections.first { $0.location.partID == OfflineTour.partID }?.location)
+            reader.read(part); await reader.waitUntilIdle()
+            #expect(reader.passage?.snapshot == outline.snapshot && reader.citations?.snapshot == outline.snapshot)
+            let observed = await app.activity.snapshot()
+            #expect(observed.runID == run && observed.completed == 4 && observed.failed == 0)
+            #expect(!observed.events.contains { $0.origin == .localResearch })
+            app.restartServer(); await app.waitUntilPrepared()
+            try await waitPhase(app, .running)
+            #expect(app.server?.runID != run && !app.researchRouteReady && app.researchMode == .mcp)
+            app.selectResearchMode(.mcp); await app.waitUntilPrepared()
+            #expect(app.researchRouteReady && app.research !== reader)
+            app.selectResearchMode(.direct); await app.waitUntilPrepared()
+            #expect(app.researchMode == .direct && app.researchRouteReady)
+        } catch {
+            #expect(await app.quit())
+            throw error
+        }
+        #expect(await app.quit())
+    }
+
     @Test func stopRestartAndSourceSwitchLeaveNoJourneyOrRecords() async throws {
         let app = try app()
         app.prepare(); await app.waitUntilPrepared()

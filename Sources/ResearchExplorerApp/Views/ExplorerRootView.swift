@@ -37,8 +37,13 @@ struct ExplorerRootView: View {
                 switch lifetime.destination {
                 case .research:
                     if let research = lifetime.research {
-                        ResearchView(model: research, focusID: lifetime.searchFocus)
-                            .disabled(lifetime.isQuitting || lifetime.termination.unsettled)
+                        VStack(spacing: 0) {
+                            ResearchModeBar(lifetime: lifetime)
+                            Divider()
+                            ResearchView(model: research, focusID: lifetime.searchFocus)
+                                .id(ObjectIdentifier(research))
+                                .disabled(lifetime.isQuitting || lifetime.termination.unsettled || !lifetime.researchRouteReady)
+                        }
                     } else {
                         ContentUnavailableView(
                             lifetime.startupProblem == nil ? "Preparing source" : "Source unavailable",

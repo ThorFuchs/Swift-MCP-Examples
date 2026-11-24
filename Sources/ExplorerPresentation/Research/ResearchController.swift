@@ -2,6 +2,7 @@
 import Foundation
 import Observation
 import ExplorerDomain
+import ExplorerMCP
 
 /// Main-actor owner of interactive research state and revision-pinned presentation.
 @MainActor @Observable public final class ResearchController {
@@ -211,6 +212,9 @@ import ExplorerDomain
         return .idle
     }
     private func publicProblem(_ error: any Error) -> ExplorerProblem {
-        source.problem((error as? ExplorerProblem)?.code ?? .upstreamUnavailable)
+        if let failure = error as? MCPResearchFailure {
+            return .init(.upstreamUnavailable, "MCP research failed.", recovery: MCPJourneyController.describe(failure))
+        }
+        return source.problem((error as? ExplorerProblem)?.code ?? .upstreamUnavailable)
     }
 }

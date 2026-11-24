@@ -40,6 +40,14 @@ struct PreparedSource: Sendable {
     private(set) var service: ExplorerService?
     private(set) var offlineEdit: OfflineRevisionEdit?
     private(set) var research: ResearchController?
+    private(set) var researchMode: ResearchExecutionMode = .direct
+    private(set) var researchRunID: UUID?
+    private(set) var researchModeProblem: String?
+    var canChangeResearchMode: Bool { !isQuitting && !termination.unsettled && bootstrap == nil && service != nil }
+    var canUseMCPResearch: Bool { canChangeResearchMode && server?.phase == .running && server?.endpoint != nil && server?.runID != nil }
+    var researchRouteReady: Bool {
+        researchMode == .direct || (researchRunID != nil && server?.runID == researchRunID && server?.phase == .running)
+    }
     private(set) var startupProblem: String?
     var destination = Workspace.research
     var activityBucketScope: MachineRoomBucketScope?
@@ -79,6 +87,44 @@ struct PreparedSource: Sendable {
             await activity.localResearch(op, success: ok, profile: service.profile)
         }, offlineEdit: edit)
     }
+    /// A mode switch discards transient reader state only after its owner joins.
+    /// The query is retained, but no search or transport exchange starts implicitly.
+    func selectResearchMode(_ mode: ResearchExecutionMode) {
+        guard canChangeResearchMode, let service,
+              mode != researchMode || (mode == .mcp && !researchRouteReady) else { return }
+        let previousQuery = research?.query ?? ""
+        let next: ResearchController
+        let run: UUID?
+        if mode == .mcp {
+            guard canUseMCPResearch, let server, let endpoint = server.endpoint, let id = server.runID else { return }
+            do {
+                let client = try RunBoundResearchClient(endpoint: endpoint, profile: profile, isCurrent: { [weak server] in
+                    server?.phase == .running && server?.runID == id && server?.endpoint == endpoint
+                })
+                // The actual server handler observer already records these operations.
+                // Do not record MCP calls a second time as direct local research.
+                next = ResearchController(client: client, source: profile)
+                run = id
+            } catch {
+                researchModeProblem = "Could not construct the selected MCP route. No request was sent."
+                return
+            }
+        } else {
+            next = makeResearch(service, source: profile, edit: offlineEdit)
+            run = nil
+        }
+        researchModeProblem = nil
+        isQuitting = true
+        bootstrap = Task { [self] in
+            await research?.shutdown()
+            next.query = previousQuery
+            research = next
+            researchMode = mode
+            researchRunID = run
+            bootstrap = nil; isQuitting = false
+        }
+    }
+
     func waitUntilPrepared() async { await bootstrap?.value }
     func waitUntilExportSettled() async { await exportTask?.value }
     func waitForTerminationSettlement() async { await termination.waitUntilSettled() }
@@ -112,10 +158,45 @@ struct PreparedSource: Sendable {
         }
     }
     /// A new server run starts with no results or inspector records of an earlier run.
-    func startServer() { guard !isQuitting, !termination.unsettled else { return }; journey.clear(); server?.start() }
-    /// A client journey never outlives its server: cancel it first (it joins promptly, the
-    /// server drain closes any remaining exchange).
-    func stopServer() { journey.cancel(); server?.stop() }
+    func startServer() {
+        guard !isQuitting, !termination.unsettled, let server, server.canStart else { return }
+        if researchMode == .mcp || journey.isRunning {
+            settleClientOwners { server.start() }
+        } else {
+            journey.clear(); server.start()
+        }
+    }
+    /// Preserve the direct reader on stop. An MCP reader must join its
+    /// operations before a new run can reuse the endpoint.
+    func stopServer() {
+        guard !isQuitting, !termination.unsettled, let server else { return }
+        if researchMode == .mcp {
+            settleClientOwners(clearJourney: false) { server.stop() }
+        } else {
+            journey.cancel(); server.stop()
+        }
+    }
+
+    func restartServer() {
+        guard !isQuitting, !termination.unsettled, let server, server.phase == .running else { return }
+        settleClientOwners { server.restart() }
+    }
+
+    private func settleClientOwners(clearJourney: Bool = true, then action: @escaping @MainActor () -> Void) {
+        guard bootstrap == nil else { return }
+        isQuitting = true
+        // Invalidate the old route immediately; a stopped/restarted reader
+        // remains explicitly unavailable until the user selects a new route.
+        if researchMode == .mcp { researchRunID = nil; research?.cancel() }
+        journey.cancel()
+        bootstrap = Task { [self] in
+            if researchMode == .mcp { await research?.shutdown() }
+            await journey.cancelAndJoin()
+            if clearJourney { journey.clear() }
+            action()
+            bootstrap = nil; isQuitting = false
+        }
+    }
     func exploreMCP() {
         guard !isQuitting, !termination.unsettled, !journey.isRunning else { return }
         journeyVisualID = UUID()
@@ -133,6 +214,7 @@ struct PreparedSource: Sendable {
                 try Task.checkCancellation()
                 let selected = prepared.service
                 self.profile = profile; service = selected; offlineEdit = prepared.offlineEdit
+                researchMode = .direct; researchRunID = nil; researchModeProblem = nil
                 research = makeResearch(selected, source: profile, edit: prepared.offlineEdit)
                 server = ServerController(activity: activity, factory: { [activity, makeHost] id in
                     try makeHost(selected, activity, id)
@@ -141,7 +223,9 @@ struct PreparedSource: Sendable {
                 startupProblem = "Source handoff failed. The old source was not relabelled."
                 // The old driver joined before handoff. A failed construction
                 // must not leave its retained service with a closed controller.
-                if let service { research = makeResearch(service, source: self.profile, edit: offlineEdit) }
+                // A failed source handoff does not silently route an MCP reader direct.
+                if researchMode == .direct, let service { research = makeResearch(service, source: self.profile, edit: offlineEdit) }
+                else { researchRunID = nil }
             }
             bootstrap = nil; isQuitting = false
         }
@@ -181,7 +265,8 @@ struct PreparedSource: Sendable {
             return true
         }, recover: { [self] in
             // Called only after the old Research driver actually joined.
-            if let service { research = makeResearch(service, source: profile, edit: offlineEdit) }
+            if researchMode == .direct, let service { research = makeResearch(service, source: profile, edit: offlineEdit) }
+            else { researchRunID = nil }
             isQuitting = false
             if service == nil { startupProblem = nil; prepare() } else { observe() }
         })
