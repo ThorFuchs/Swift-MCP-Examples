@@ -4,6 +4,8 @@ import AppKit
 import ExplorerPresentation
 import ExplorerDomain
 
+/// Native Machine Room: explicit host controls, run-scoped server analytics
+/// and a separately scoped, opt-in client journey.
 struct ServerView: View {
     @Bindable var lifetime: AppLifetime
     @State private var showConnection = false

@@ -6,6 +6,7 @@ import ExplorerPresentation
 /// Each panel describes its denominator explicitly. All samples are obtained
 /// from the same bounded projection as Activity Pulse; no new observer exists.
 struct MachineRoomAnalyticsGrid: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let analytics: MachineRoomAnalytics
 
     var body: some View {
@@ -47,6 +48,7 @@ struct MachineRoomAnalyticsGrid: View {
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 3)) }
                     .chartYAxisLabel("ms")
                     .frame(height: 175)
+                    .animation(ExplorerDesign.Motion.animation(.chart, reduceMotion: reduceMotion), value: analytics.latency.map(\.id))
                     .accessibilityLabel("Recent handler latency samples, in milliseconds")
                 }
                 Text("Up to 50 retained terminal calls, not the complete latency history. Missing durations are omitted.")
@@ -80,6 +82,7 @@ struct MachineRoomAnalyticsGrid: View {
                     .chartXScale(domain: 0...max(1, analytics.tools.map(\.count).max() ?? 0))
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
                     .frame(height: 175)
+                    .animation(ExplorerDesign.Motion.animation(.chart, reduceMotion: reduceMotion), value: analytics.tools.map(\.count))
                     .accessibilityLabel("Tool breakdown in retained terminal sample")
                 }
                 ForEach(analytics.tools) { row in
@@ -131,6 +134,7 @@ struct MachineRoomAnalyticsGrid: View {
                                 .accessibilityValue("\(slice.count) calls")
                         }
                         .frame(height: 175)
+                        .animation(ExplorerDesign.Motion.animation(.chart, reduceMotion: reduceMotion), value: values.map(\.count))
                         .accessibilityLabel("Outcome distribution for the observed run")
                     } else {
                         emptyChart("No terminal calls yet", symbol: "chart.pie")

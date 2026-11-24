@@ -15,6 +15,8 @@ struct PreparedSource: Sendable {
     let service: ExplorerService
     let offlineEdit: OfflineRevisionEdit?
 }
+/// Owns the app's source, research, server, client journey and activity observation.
+/// View transitions never own or delay these asynchronous operations.
 @MainActor @Observable final class AppLifetime {
     private(set) var profile: SourceProfile
     let termination = AppTerminationController()

@@ -3,7 +3,9 @@ import SwiftUI
 import Charts
 import ExplorerPresentation
 
+/// Five planned stages; status, duration and validation come from actual observations.
 struct JourneyMilestoneRail: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let projection: MachineRoomJourneyProjection
 
     var body: some View {
@@ -20,7 +22,10 @@ struct JourneyMilestoneRail: View {
         let symbol = latest?.status == .succeeded ? "checkmark.circle" : latest?.status == .failed ? "exclamationmark.triangle" : latest?.status == .cancelled ? "stop.circle" : "circle.dashed"
         return VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
             HStack {
-                Image(systemName: symbol).foregroundStyle(tone)
+                Image(systemName: symbol)
+                    .foregroundStyle(tone)
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                    .animation(ExplorerDesign.Motion.animation(.status, reduceMotion: reduceMotion), value: symbol)
                     .accessibilityHidden(true)
                 Text(milestone.stage.rawValue).font(ExplorerDesign.Typography.panel)
             }
@@ -51,6 +56,7 @@ struct JourneyMilestoneRail: View {
 /// Both charts select the same retained record. Ordinals are retention order,
 /// not reconstructed start times or a network waterfall.
 struct JourneyExchangeCharts: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let projection: MachineRoomJourneyProjection
     @State private var selectedKey: String?
 
@@ -193,6 +199,8 @@ struct JourneyExchangeCharts: View {
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
                     .chartXAxisLabel("ms")
                     .frame(height: chartHeight)
+                    .animation(ExplorerDesign.Motion.animation(.chart, reduceMotion: reduceMotion), value: exchanges.map(\.id))
+                    .animation(ExplorerDesign.Motion.animation(.selection, reduceMotion: reduceMotion), value: selectedKey)
                     .accessibilityLabel("Duration by retained SDK exchange")
                 } else {
                     Text("No measured durations").foregroundStyle(.secondary)
@@ -237,6 +245,8 @@ struct JourneyExchangeCharts: View {
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
                     .chartXAxisLabel("B")
                     .frame(height: chartHeight)
+                    .animation(ExplorerDesign.Motion.animation(.chart, reduceMotion: reduceMotion), value: exchanges.map(\.id))
+                    .animation(ExplorerDesign.Motion.animation(.selection, reduceMotion: reduceMotion), value: selectedKey)
                     .accessibilityLabel("Sent and received SDK message bytes by retained exchange")
                     HStack {
                         Label("Sent", systemImage: "square.fill").foregroundStyle(ExplorerDesign.Palette.accent)

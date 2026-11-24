@@ -5,7 +5,9 @@ import ExplorerPresentation
 /// The cockpit consumes the same snapshot as the Activity workspace. It does
 /// not fetch, poll, start a server, or manufacture a metric.
 struct MachineRoomOverview: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let projection: MachineRoomProjection
+    /// Opens the retained wall-clock interval in Activity without mutating the store.
     let onInspect: (MachineRoomBucketScope) -> Void
     @State private var pausedProjection: MachineRoomProjection?
 
@@ -92,6 +94,8 @@ struct MachineRoomOverview: View {
                             pausedProjection = chartsPaused ? nil : projection
                         }
                         .buttonStyle(.glass)
+                        .contentTransition(reduceMotion ? .identity : .opacity)
+                        .animation(ExplorerDesign.Motion.animation(.selection, reduceMotion: reduceMotion), value: chartsPaused)
                         .help("Freeze only the charts; live KPIs and the server continue unchanged.")
                     }
                 }

@@ -49,6 +49,42 @@ enum ExplorerDesign {
         static let cautionWash = Color.orange.opacity(0.09)
     }
 
+    /// State-driven motion vocabulary shared by the native dashboard.
+    ///
+    /// Durations are intentionally short enough to settle between the existing
+    /// 250 ms observation updates. These are presentation transitions only:
+    /// they never schedule work, defer cancellation, or imply network traffic.
+    enum Motion {
+        /// Distinguishes data changes from explicit selection and status feedback.
+        enum Role: CaseIterable {
+            case metric, chart, selection, status
+
+            /// Nominal animation duration in seconds (spring settling can differ).
+            var duration: TimeInterval {
+                switch self {
+                case .metric: 0.18
+                case .chart: 0.16
+                case .selection: 0.20
+                case .status: 0.22
+                }
+            }
+        }
+
+        /// Resolves the native animation for a role, or nil when Reduce Motion is enabled.
+        /// - Parameters:
+        ///   - role: The kind of visual change, never a business operation.
+        ///   - reduceMotion: SwiftUI's system accessibility preference.
+        /// - Returns: A short animation or no animation.
+        static func animation(_ role: Role, reduceMotion: Bool) -> Animation? {
+            guard !reduceMotion else { return nil }
+            switch role {
+            case .metric, .chart: return .easeOut(duration: role.duration)
+            case .selection: return .snappy(duration: role.duration, extraBounce: 0)
+            case .status: return .smooth(duration: role.duration, extraBounce: 0)
+            }
+        }
+    }
+
     enum Reader {
         static let minimumSize = 14.0
         static let maximumSize = 26.0
@@ -135,7 +171,9 @@ enum ExplorerPillTone {
     }
 }
 
+/// A compact, semantic status indicator with state-driven text replacement.
 struct ExplorerPill: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let symbol: String
     var tone: ExplorerPillTone = .neutral
@@ -143,6 +181,8 @@ struct ExplorerPill: View {
     var body: some View {
         Label(title, systemImage: symbol)
             .font(ExplorerDesign.Typography.detail)
+            .contentTransition(reduceMotion ? .identity : .opacity)
+            .animation(ExplorerDesign.Motion.animation(.status, reduceMotion: reduceMotion), value: title)
             .foregroundStyle(tone.foreground)
             .padding(.horizontal, ExplorerDesign.Space.sm)
             .padding(.vertical, ExplorerDesign.Space.xs)
@@ -151,7 +191,10 @@ struct ExplorerPill: View {
     }
 }
 
+/// A measured KPI tile. Numeric transitions are cosmetic; the string remains
+/// the exact observed value. Unavailable and missing samples never count as zero.
 struct ExplorerMetricTile: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let value: String
     let symbol: String
@@ -163,7 +206,7 @@ struct ExplorerMetricTile: View {
                     .font(ExplorerDesign.Typography.detail)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                Text(value)
+                metricText
                     .font(value == "Unavailable" || value == "No samples"
                           ? .system(size: 16, weight: .semibold)
                           : .system(size: 25, weight: .semibold, design: .rounded))
@@ -174,6 +217,16 @@ struct ExplorerMetricTile: View {
             }
             .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
             .accessibilityElement(children: .combine)
+        }
+    }
+
+    @ViewBuilder private var metricText: some View {
+        if let numeric = value.split(separator: " ").first.flatMap({ Double($0) }), numeric.isFinite {
+            Text(value)
+                .contentTransition(reduceMotion ? .identity : .numericText(value: numeric))
+                .animation(ExplorerDesign.Motion.animation(.metric, reduceMotion: reduceMotion), value: value)
+        } else {
+            Text(value)
         }
     }
 }

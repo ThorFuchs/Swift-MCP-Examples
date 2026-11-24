@@ -3,6 +3,8 @@ import SwiftUI
 import AppKit
 import ExplorerPresentation
 
+/// Retained, redacted event log. Interval drill-down filters wall-clock timestamps
+/// for one run; it is not an exhaustive reconstruction of a chart bucket.
 struct ActivityView: View {
     @Bindable var lifetime: AppLifetime
     let focusID: UUID

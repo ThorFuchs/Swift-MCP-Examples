@@ -3,7 +3,10 @@ import SwiftUI
 import Charts
 import ExplorerPresentation
 
+/// Rolling five-minute histogram of observed terminal handler calls.
+/// Selection is run-scoped and does not reconstruct exact event membership.
 struct RequestActivityChart: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let projection: MachineRoomProjection
     let onInspect: (MachineRoomBucketScope) -> Void
     @State private var selectedSlot: Int64?
@@ -54,6 +57,9 @@ struct RequestActivityChart: View {
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
                     .chartYAxisLabel("Calls / 5 s")
                     .frame(height: 220)
+                    // Observe counts, not the continuously re-anchored wall-clock dates.
+                    .animation(ExplorerDesign.Motion.animation(.chart, reduceMotion: reduceMotion), value: metrics.buckets.map(\.calls))
+                    .animation(ExplorerDesign.Motion.animation(.selection, reduceMotion: reduceMotion), value: selectedSlot)
                     .accessibilityLabel("Terminal eligible tool calls over five minutes")
                     .accessibilityValue(accessibleSummary(metrics))
                     selectionControls(analytics)
