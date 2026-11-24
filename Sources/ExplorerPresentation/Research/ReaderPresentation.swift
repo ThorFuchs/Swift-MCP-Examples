@@ -16,13 +16,14 @@ public enum ResearchStatus: Equatable, Sendable {
     case loadingReferences
     case section(truncated: Bool)
     case comparing
+    case loadingHistory
     case publishingEdit
     case cancelled
     /// The pinned snapshot expired or was evicted; only an explicit new outline recovers.
     case expired
     case problem(ExplorerProblem.Code)
 
-    public var isBusy: Bool { [.searching, .opening, .readingSection, .loadingReferences, .comparing, .publishingEdit].contains(self) }
+    public var isBusy: Bool { [.searching, .opening, .readingSection, .loadingReferences, .comparing, .loadingHistory, .publishingEdit].contains(self) }
 }
 
 /// The evidence for the selected section: what the reference projection actually says.
@@ -96,6 +97,7 @@ extension ResearchController {
         case .references: return .loadingReferences
         case .section: return .section(truncated: passage?.truncated ?? false)
         case .comparing: return .comparing
+        case .history: return .loadingHistory
         case .publishing: return .publishingEdit
         case .cancelled: return .cancelled
         case .problem:

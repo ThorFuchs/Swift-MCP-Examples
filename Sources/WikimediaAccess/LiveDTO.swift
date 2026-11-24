@@ -18,6 +18,20 @@ public struct RESTPage: Decodable, Sendable {
     public let html: String
     enum CodingKeys: String, CodingKey { case id, key, title, latest, contentModel = "content_model", license, html }
 }
+/// Only the bounded history fields used by the reader are decoded. The
+/// pagination link is never followed and editor/comment fields are ignored.
+struct RESTHistory: Decodable, Sendable {
+    struct Row: Decodable, Sendable {
+        let id: Int64
+        let timestamp: String
+        let size: Int64
+        let delta: Int64?
+        let minor: Bool
+    }
+    let revisions: [Row]
+    let older: String?
+}
+
 enum RESTCodec {
     static func decode<T: Decodable & Sendable>(_ type: T.Type, _ data: Data) throws -> T {
         guard data.count <= 4_194_304 else { throw LiveFailure.bodyLimit }

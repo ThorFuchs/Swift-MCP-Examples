@@ -65,6 +65,42 @@ public actor WikipediaProvider: ExplorerProvider {
             return CandidateResolution(candidate: mapping.candidate, liveSnapshot: snapshot)
         } catch { throw sanitized(error) }
     }
+    /// Load earlier history for an admitted candidate and the selected pin.
+    /// This endpoint returns title-scoped metadata, not an admitted snapshot.
+    public func history(candidateID: String, pinned: SnapshotID, olderThan: String) async throws -> RevisionHistory {
+        let deadline = try admit(pinned.project); defer { inFlight -= 1 }
+        guard profile.admits(pinned), RevisionHistoryEntry.admitsID(olderThan),
+              RevisionHistoryEntry.admitsID(pinned.pageID), RevisionHistoryEntry.admitsID(pinned.revisionID) else {
+            throw profile.problem(.invalidArguments)
+        }
+        expire()
+        guard let mapping = mappings[candidateID], mapping.candidate.pageID == pinned.pageID else {
+            throw profile.problem(.unknownCandidate)
+        }
+        do {
+            let reply = try await response(WikipediaRoute.history(mapping.key, olderThan: olderThan), deadline: deadline)
+            let wire = try RESTCodec.decode(RESTHistory.self, reply.body)
+            guard wire.revisions.count <= RevisionHistory.maximumEntries,
+                  (wire.older?.utf8.count ?? 0) <= 2048 else { throw LiveFailure.malformed }
+            let formatter = ISO8601DateFormatter()
+            let rows = try wire.revisions.map { row in
+                guard row.timestamp.utf8.count <= 128,
+                      let date = formatter.date(from: row.timestamp) else { throw LiveFailure.malformed }
+                return RevisionHistoryEntry(id: String(row.id), timestamp: date, size: row.size,
+                                            delta: row.delta, minor: row.minor)
+            }
+            let history = RevisionHistory(pinned: pinned, title: mapping.candidate.title,
+                                          anchor: olderThan, entries: rows, hasOlder: wire.older != nil)
+            guard history.isAdmitted else { throw LiveFailure.malformed }
+            try finish(deadline)
+            guard let current = mappings[candidateID], current.expires > now(),
+                  current.key == mapping.key, current.candidate == mapping.candidate else {
+                throw profile.problem(.unknownCandidate)
+            }
+            return history
+        } catch { throw sanitized(error) }
+    }
+
     private func response(_ url: URL, deadline: ContinuousClock.Instant) async throws -> LiveHTTPResponse {
         for attempt in 0..<2 {
             try finish(deadline)

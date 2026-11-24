@@ -173,6 +173,7 @@ struct ReadingPane: View {
         case .readingSection: ProgressView("Reading section…").controlSize(.small)
         case .loadingReferences: ProgressView("Loading references…").controlSize(.small)
         case .comparing: ProgressView("Checking for a newer revision…").controlSize(.small)
+        case .loadingHistory: ProgressView("Loading earlier revisions…").controlSize(.small)
         case .cancelled: Label("Stopped. The pinned revision is unchanged; choose a section to continue.", systemImage: "stop.circle").foregroundStyle(.secondary)
         default: EmptyView()
         }
@@ -286,6 +287,10 @@ struct RevisionPanel: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 if let comparison = model.comparison { result(comparison) }
+                if model.source == .wikipediaEnglish {
+                    Divider()
+                    RevisionHistoryPanel(model: model)
+                }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
         } label: { Label("Revision", systemImage: "clock.arrow.circlepath") }
     }
@@ -297,7 +302,15 @@ struct RevisionPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Revision \(latest) is available\(comparison.latest.provenance.modifiedAt.map { " (edited \($0))" } ?? ""). You are still reading \(pinned).", systemImage: "exclamationmark.arrow.circlepath")
                 switch comparison.passage {
-                case .notCompared: Text("Choose a section, then check again to compare its text.").foregroundStyle(.secondary)
+                case .notCompared:
+                    Text(model.source == .wikipediaEnglish
+                         ? "Live section identifiers are revision-local. Compare the exact revisions on Wikipedia, or switch to the new revision and choose its section."
+                         : "Choose a section, then check again to compare its text.").foregroundStyle(.secondary)
+                    if model.source == .wikipediaEnglish,
+                       RevisionHistoryEntry.admitsID(pinned), RevisionHistoryEntry.admitsID(latest),
+                       let url = URL(string: "https://en.wikipedia.org/w/index.php?oldid=\(pinned)&diff=\(latest)") {
+                        Link("Compare revisions on Wikipedia", destination: url)
+                    }
                 case .unchanged: Text("The selected section is identical in \(latest).").foregroundStyle(.secondary)
                 case .absentInLatest: Text("The selected section does not exist in \(latest).").foregroundStyle(.secondary)
                 case .changed(let old, let new):

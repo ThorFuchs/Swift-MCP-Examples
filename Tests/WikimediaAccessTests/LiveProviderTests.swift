@@ -105,6 +105,39 @@ private func html(_ content: String, revision: Int = 22, version: String = "2.8.
         #expect(passage.text.contains("child"))
     }
 
+    @Test func earlierHistoryUsesAdmittedCandidateAndIgnoresUpstreamCursorURLs() async throws {
+        let transport = ReplayTransport([response(searchWire), response(#"{"revisions":[{"id":21,"timestamp":"2026-10-20T00:00:00Z","size":125,"delta":-5,"minor":true,"user":{"name":"ignored"},"comment":"ignored"}],"older":"https://evil.example/not-followed"}"#)])
+        let provider = WikipediaProvider(transport: transport)
+        let page = try await provider.search(query: "Test", project: "enwiki", limit: 1)
+        let candidate = try #require(page.candidates.first)
+        let pin = SnapshotID(provider: "mediawiki-rest", project: "enwiki", pageID: "11", revisionID: "22", normalizerVersion: "mediawiki-html-1")
+        let history = try await provider.history(candidateID: candidate.id, pinned: pin, olderThan: "22")
+        #expect(history.isAdmitted && history.entries.map(\.id) == ["21"] && history.nextAnchor == "21")
+        #expect(history.entries.first?.delta == -5)
+        #expect(await transport.count == 2)
+        let urls = await transport.urls
+        #expect(urls.last == (try WikipediaRoute.history("Test/Page%?#é", olderThan: "22")))
+        #expect(history.entries.first?.permalink?.absoluteString == "https://en.wikipedia.org/w/index.php?oldid=21")
+    }
+
+    @Test func historyRouteRejectsOtherOriginsAndUnadmittedParameters() throws {
+        let url = try WikipediaRoute.history("A/b%?é", olderThan: "22")
+        #expect(WikipediaRoute.allowed(url))
+        for id in ["0", "-1", "01", "9223372036854775808", "22/with_html"] {
+            #expect(throws: LiveFailure.self) { try WikipediaRoute.history("A", olderThan: id) }
+        }
+        for value in [
+            "https://evil.example/w/rest.php/v1/page/A/history?older_than=22",
+            "https://en.wikipedia.org/w/rest.php/v1/page/A/history",
+            "https://en.wikipedia.org/w/rest.php/v1/page/A/history?older_than=22&filter=bot",
+            "https://en.wikipedia.org/w/rest.php/v1/page/A/history?older_than=22&older_than=21",
+            "https://en.wikipedia.org/w/rest.php/v1/page/A/history?older_than=0",
+            "https://en.wikipedia.org/w/rest.php/v1/revision/22/with_html"
+        ] {
+            #expect(!WikipediaRoute.allowed(URL(string: value)!))
+        }
+    }
+
     @Test func versionAndRevisionConflictsAreDenied() async throws {
         let normalizer = MediaWikiNormalizer()
         for raw in [html("<section data-mw-section-id='0'>x</section>", revision: 23), html("<section data-mw-section-id='0'>x</section>", version: "9.0.0")] {

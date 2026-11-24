@@ -57,6 +57,21 @@ public actor ExplorerService {
         try await cache.insert(snapshot, now: now)
         return try SnapshotProjection.outline(snapshot)
     }
+    /// Read one history segment for an already admitted live pin. Shares the
+    /// normal provider admission ceiling and cancellation policy.
+    public func revisionHistory(candidate: Candidate, pinned: SnapshotID, olderThan: String) async throws -> RevisionHistory {
+        try allowed(pinned.project); try Task.checkCancellation()
+        guard profile == .wikipediaEnglish, profile.admits(pinned), candidate.project == pinned.project,
+              candidate.pageID == pinned.pageID, Normalizer.component(candidate.id),
+              let wikipedia = provider as? WikipediaProvider else { throw Self.arguments() }
+        try admit(); defer { inFlight -= 1 }
+        _ = try await cache.get(pinned, now: clock())
+        let result = try await wikipedia.history(candidateID: candidate.id, pinned: pinned, olderThan: olderThan)
+        try Task.checkCancellation()
+        guard result.pinned == pinned, result.anchor == olderThan, result.isAdmitted else { throw Self.providerContract() }
+        return result
+    }
+
     /// Reads a bounded passage from the exact cached snapshot and part identity.
     public func section(_ input: SectionInput) async throws -> SectionPassage {
         try identity(input.snapshot, part: input.part)

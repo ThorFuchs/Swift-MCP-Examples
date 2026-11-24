@@ -19,15 +19,26 @@ import ExplorerMCP
     public private(set) var referenceProblem: ExplorerProblem?
     /// Explicit revision check; never replaces `outline`, `passage` or `citations`.
     public private(set) var comparison: RevisionComparison?
+    private var historyPage: RevisionHistory?
+    public private(set) var historyProblem: ExplorerProblem?
+    /// History is visible only for the still-selected immutable pin.
+    public var revisionHistory: RevisionHistory? {
+        guard historyPage?.pinned == outline?.snapshot else { return nil }
+        return historyPage
+    }
+    public var supportsRevisionHistory: Bool {
+        source == .wikipediaEnglish && client is any RevisionHistoryResearchClient
+    }
     /// Present only for the offline demo source.
     public let offlineEdit: OfflineRevisionEdit?
     public private(set) var offlineEditPublished = false
-    public var isBusy: Bool { [.searching, .opening, .reading, .references, .comparing, .publishing].contains(phase) }
+    public var isBusy: Bool { [.searching, .opening, .reading, .references, .comparing, .publishing, .history].contains(phase) }
     @ObservationIgnored private let client: any ResearchClient
     @ObservationIgnored private let record: @Sendable (String, Bool) async -> Void
     private enum Action {
         case search(String), open(Candidate), read(Outline, PartLocation), tour
         case compare(Candidate, Outline, PartLocation?), publishEdit
+        case history(Candidate, SnapshotID, String)
     }
     @ObservationIgnored private var pending: (UInt64, Action)?
     @ObservationIgnored private var generation: UInt64 = 0
@@ -41,15 +52,33 @@ import ExplorerMCP
         // A simulated edit is meaningful only for fictional data; live sources change upstream.
         self.offlineEdit = source == .offlineDemo ? offlineEdit : nil
     }
+    private func resetHistory() { historyPage = nil; historyProblem = nil }
+
+    /// Explicit request for the previous twenty revisions, or one older page.
+    /// Keeps the article, section, references and selected execution route.
+    public func loadRevisionHistory(older: Bool = false) {
+        guard !closed, !isBusy, supportsRevisionHistory,
+              let candidate, let outline else { return }
+        let anchor: String
+        if older {
+            guard let next = revisionHistory?.nextAnchor else { return }
+            anchor = next
+        } else { anchor = outline.snapshot.revisionID }
+        historyProblem = nil
+        enqueue(.history(candidate, outline.snapshot, anchor), phase: .history, preserveEvidence: true)
+    }
+
     public func search() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, q.utf8.count <= 256 else {
             cancel(); problem = PublicProblems.project(.invalidArguments); phase = .problem; return
         }
+        resetHistory()
         candidate = nil; outline = nil; selectedPart = nil; passage = nil; citations = nil; comparison = nil
         enqueue(.search(q), phase: .searching)
     }
     public func open(_ candidate: Candidate) {
+        resetHistory()
         self.candidate = candidate; outline = nil; selectedPart = nil; passage = nil; citations = nil; comparison = nil
         enqueue(.open(candidate), phase: .opening)
     }
@@ -71,7 +100,9 @@ import ExplorerMCP
     /// Switches the reader to the compared latest revision: an explicit user decision.
     public func adoptLatestRevision() {
         guard !isBusy, let comparison, !comparison.latestIsPinned, outline?.snapshot == comparison.pinned else { return }
-        let part = comparison.partID.flatMap { id in comparison.latest.sections.first { $0.location.partID == id }?.location }
+        // Live part IDs are revision-local ordinals, not stable identities.
+        let part = source == .offlineDemo ? comparison.partID.flatMap { id in comparison.latest.sections.first { $0.location.partID == id }?.location } : nil
+        resetHistory()
         outline = comparison.latest; self.comparison = nil
         selectedPart = nil; passage = nil; citations = nil; problem = nil; referenceProblem = nil; phase = .outline
         if let part { read(part) }
@@ -90,6 +121,7 @@ import ExplorerMCP
         enqueue(.read(outline, part), phase: .reading)
     }
     public func back() {
+        resetHistory()
         cancel(); candidate = nil; outline = nil; passage = nil; citations = nil; selectedPart = nil; comparison = nil
         problem = nil; referenceProblem = nil; phase = page == nil ? .idle : .candidates
     }
@@ -103,10 +135,11 @@ import ExplorerMCP
 
     // One driver, one worker and one replacement, regardless of click rate.
     // Superseded work is cancelled AND joined before the next service operation.
-    private func enqueue(_ action: Action, phase: ResearchPhase) {
+    private func enqueue(_ action: Action, phase: ResearchPhase, preserveEvidence: Bool = false) {
         guard !closed else { return }
         generation &+= 1; pending = (generation, action); worker?.cancel()
-        problem = nil; referenceProblem = nil; self.phase = phase
+        if !preserveEvidence { problem = nil; referenceProblem = nil }
+        self.phase = phase
         guard driver == nil else { return }
         driver = Task { [self] in
             while let (token, action) = pending {
@@ -160,7 +193,9 @@ import ExplorerMCP
                 let latest = try await client.outline(.init(project: candidate.project, candidateID: candidate.id))
                 guard current(token) else { return }
                 var passage = RevisionComparison.Passage.notCompared
-                if let part, latest.snapshot != pinned.snapshot {
+                // Only the owned fictional fixture guarantees stable part IDs
+                // across revisions. Never align live sections by ordinal alone.
+                if source == .offlineDemo, let part, latest.snapshot != pinned.snapshot {
                     await record(operation, true)
                     operation = "read_article_section"
                     // Re-read the pinned text from its own snapshot: an expired pin is reported, not replaced.
@@ -173,6 +208,25 @@ import ExplorerMCP
                 guard current(token), outline?.snapshot == pinned.snapshot, selectedPart == part else { return }
                 comparison = .init(pinned: pinned.snapshot, latest: latest, partID: part?.partID, passage: passage)
                 phase = restingPhase()
+            case .history(let candidate, let pinned, let anchor):
+                operation = "get_revision_history"
+                guard let historyClient = client as? any RevisionHistoryResearchClient else { return }
+                do {
+                    let result = try await historyClient.revisionHistory(candidate: candidate, pinned: pinned, olderThan: anchor)
+                    guard current(token), self.candidate == candidate, outline?.snapshot == pinned else { return }
+                    guard result.pinned == pinned, result.anchor == anchor, result.isAdmitted else {
+                        throw source.problem(.revisionMismatch)
+                    }
+                    historyPage = result
+                    phase = restingPhase()
+                } catch is CancellationError { throw CancellationError() }
+                catch {
+                    guard current(token), outline?.snapshot == pinned else { return }
+                    historyProblem = publicProblem(error)
+                    phase = restingPhase()
+                    await record(operation, false)
+                    return
+                }
             case .publishEdit:
                 await offlineEdit?.publish()
                 offlineEditPublished = true // the source changed even if this action was superseded

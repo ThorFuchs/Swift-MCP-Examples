@@ -21,6 +21,17 @@ public enum WikipediaRoute {
               let url = URL(string: origin + "/w/rest.php/v1/page/" + segment + "/with_html") else { throw LiveFailure.url }
         return url
     }
+    /// The sole additional read route: one page of history older than an exact
+    /// positive revision ID. Never follows a server-provided pagination URL.
+    public static func history(_ key: String, olderThan: String) throws -> URL {
+        guard RevisionHistoryEntry.admitsID(olderThan),
+              var c = URLComponents(url: try page(key), resolvingAgainstBaseURL: false) else { throw LiveFailure.url }
+        c.percentEncodedPath = String(c.percentEncodedPath.dropLast("/with_html".count)) + "/history"
+        c.queryItems = [.init(name: "older_than", value: olderThan)]
+        guard let url = c.url else { throw LiveFailure.url }
+        return url
+    }
+
     public static func allowed(_ url: URL) -> Bool {
         guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false), c.scheme == "https",
               c.host == "en.wikipedia.org", c.user == nil, c.password == nil, c.port == nil, c.fragment == nil else { return false }
@@ -32,6 +43,14 @@ public enum WikipediaRoute {
                 && (1...20).contains(Int(q.first(where: { $0.name == "limit" })?.value ?? "") ?? 0)
         }
         let prefix = "/w/rest.php/v1/page/", suffix = "/with_html"
+        if p.hasPrefix(prefix), p.hasSuffix("/history") {
+            let segment = String(p.dropFirst(prefix.count).dropLast("/history".count))
+            guard !segment.isEmpty, !segment.contains("/"), segment.utf8.count <= 3072,
+                  let key = segment.removingPercentEncoding,
+                  let q = c.queryItems, q.count == 1, q[0].name == "older_than", let anchor = q[0].value,
+                  let canonical = try? history(key, olderThan: anchor) else { return false }
+            return canonical.absoluteString == url.absoluteString
+        }
         guard p.hasPrefix(prefix), p.hasSuffix(suffix), c.query == nil else { return false }
         let segment = String(p.dropFirst(prefix.count).dropLast(suffix.count))
         return !segment.isEmpty && !segment.contains("/") && segment != "." && segment != ".." && segment.utf8.count <= 3072

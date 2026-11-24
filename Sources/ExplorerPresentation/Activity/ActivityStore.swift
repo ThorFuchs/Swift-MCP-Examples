@@ -86,7 +86,7 @@ public actor ActivityStore {
         return .init(events: events, recentCalls: recent, buckets: chart, runID: runID, discarded: discarded, retainedBytes: bytes, active: active.count, completed: completed, failed: failed, cancelled: cancelled, medianMilliseconds: durations.isEmpty ? nil : durations[durations.count / 2], durationSampleCount: durations.count, metricsPartial: partial)
     }
     private static func operation(_ value: String) -> String {
-        ["search_articles", "get_article_outline", "read_article_section", "get_section_references", "run", "lifecycle"].contains(value) ? value : "unknown"
+        ["search_articles", "get_article_outline", "read_article_section", "get_section_references", "get_revision_history", "run", "lifecycle"].contains(value) ? value : "unknown"
     }
     private static func clip(_ value: String, maximum: Int) -> String {
         var bytes = Array(value.utf8.prefix(maximum))

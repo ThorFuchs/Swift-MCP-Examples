@@ -11,6 +11,13 @@ public protocol ResearchClient: Sendable {
     func references(_ input: ReferencesInput) async throws -> SectionReferences
 }
 extension ExplorerService: ResearchClient {}
+
+/// Optional direct-provider history capability. It is deliberately not
+/// implemented by the MCP adapter until the historical wire contract exists.
+public protocol RevisionHistoryResearchClient: ResearchClient {
+    func revisionHistory(candidate: Candidate, pinned: SnapshotID, olderThan: String) async throws -> RevisionHistory
+}
+extension ExplorerService: RevisionHistoryResearchClient {}
 /// The same research operations over a real MCP connection (HTTP or stdio).
 extension MCPResearchClient: ResearchClient {}
 
@@ -18,7 +25,7 @@ extension MCPResearchClient: ResearchClient {}
 public typealias ResearchSource = SourceProfile
 public enum ResearchPhase: String, Sendable {
     case idle, searching, candidates, opening, outline, reading, references, section, empty, problem, cancelled
-    case comparing, publishing
+    case comparing, publishing, history
 }
 
 /// The predictable one-click offline journey: search → Observatory → its telescope section.
