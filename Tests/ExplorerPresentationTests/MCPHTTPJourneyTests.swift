@@ -4,6 +4,7 @@ import Testing
 import Synchronization
 import MCPClient
 import MCPHTTPClient
+import MCPSkillsClient
 import ExplorerDomain
 import WikimediaAccess
 import ExplorerMCP
@@ -84,6 +85,78 @@ private final class Clock: Sendable {
 
 /// RE-02 (#34): a real public-SDK client over real loopback HTTP against this app's host.
 @Suite(.serialized) struct MCPHTTPJourneyTests {
+
+    /// R5 proves the public SDK primitives over a real ephemeral HTTP host,
+    /// independent of the fixed six-exchange demonstration.
+    @Test @MainActor func knowledgeResourcesPromptsAndSkillOverHTTP() async throws {
+        let clock = Clock()
+        let service = ExplorerService(provider: try FixtureProvider.load(), limits: try ExplorerLimits(),
+                                      clock: { clock.now.withLock { $0 } })
+        let server = LiveServer(service: service)
+        let endpoint = try await server.start()
+        do {
+            let sdk = Client(transport: try MCPJourneyController.httpTransport(endpoint))
+            let mcp = MCPResearchClient(client: sdk, profile: .offlineDemo)
+            let (description, tools) = try await mcp.prepare()
+            #expect(Set(tools.map(\.name)) == Set(MCPResearchClient.toolNames))
+            #expect(SkillsClient.isSupported(by: description))
+            let templates = try await sdk.listResourceTemplates()
+            #expect(templates.nextCursor == nil)
+            #expect(Set(templates.items.map(\.uriTemplate)) == Set([ResearchResourceAddress.outlineTemplate, ResearchResourceAddress.sectionTemplate]))
+            let resources = try await sdk.listResources()
+            #expect(resources.items.contains { $0.uri == ExplorerKnowledge.skillURI })
+            let prompts = try await sdk.listPrompts()
+            #expect(prompts.nextCursor == nil && Set(prompts.items.map(\.name)) == Set(ExplorerKnowledge.promptNames))
+            for name in ExplorerKnowledge.promptNames {
+                let result = try await sdk.getPrompt(name, arguments: ["topic": "Riverglass"])
+                #expect(result.messages.count == 1 && result.messages.first?.role == .user)
+                #expect(result.messages.first?.content.text?.contains("Riverglass") == true)
+                #expect(result.messages.first?.content.text?.contains("Offline demo") == true)
+            }
+            await #expect(throws: ClientError.self) {
+                try await sdk.getPrompt("explore_topic", arguments: ["topic": String(repeating: "x", count: 257)])
+            }
+            let skills = SkillsClient(client: sdk)
+            let skillPage = try await skills.list()
+            let entry = try #require(skillPage.items.first { $0.uri == ExplorerKnowledge.skillURI })
+            #expect(entry.name == "evidence-research" && entry.files.count == 1)
+            let verified = try await skills.load(entry)
+            #expect(verified.markdown.contains("Evidence-first research"))
+            // Read the snapshot only after the actual tool call admits it.
+            let page = try await mcp.search(.init(query: "Riverglass", project: "fixture-enwiki", limit: 10))
+            let candidate = try #require(page.candidates.first { $0.id == OfflineTour.candidateID })
+            let outline = try await mcp.outline(.init(project: candidate.project, candidateID: candidate.id))
+            let part = try #require(outline.sections.first { $0.location.partID == OfflineTour.partID }?.location)
+            let address = try #require(ResearchResourceAddress(snapshot: outline.snapshot, kind: .outline))
+            let section = try #require(ResearchResourceAddress(snapshot: outline.snapshot, kind: .section(part.partID)))
+            let outlineContents = try await sdk.readResource(address.uri)
+            let outlineContent = try #require(outlineContents.first)
+            #expect(outlineContents.count == 1 && outlineContent.uri == address.uri && outlineContent.mimeType == "application/json")
+            let decodedOutline = try JSONDecoder().decode(Outline.self, from: Data(outlineContent.bytes))
+            #expect(decodedOutline.snapshot == outline.snapshot && decodedOutline.provenance.synthetic)
+            let sectionContents = try await sdk.readResource(section.uri)
+            let sectionContent = try #require(sectionContents.first)
+            let passage = try JSONDecoder().decode(SectionPassage.self, from: Data(sectionContent.bytes))
+            #expect(sectionContents.count == 1 && sectionContent.uri == section.uri)
+            #expect(passage.snapshot == part.snapshot && passage.selectedPartID == part.partID)
+            #expect(passage.text.utf8.count <= 4096 && passage.text.contains("2-metre"))
+            await #expect(throws: ClientError.self) {
+                try await sdk.readResource(section.uri + "?latest=1")
+            }
+            // Resources/Prompts/Skills are not eligible tool-handler events.
+            let observed = await server.activity.snapshot()
+            #expect(observed.completed == 2 && observed.failed == 0 && observed.cancelled == 0)
+            clock.advance(301)
+            await #expect(throws: ClientError.self) { try await sdk.readResource(address.uri) }
+            await #expect(throws: ClientError.self) { try await sdk.readResource(section.uri) }
+            #expect(await server.activity.snapshot().completed == 2)
+        } catch {
+            #expect(await server.stop())
+            throw error
+        }
+        #expect(await server.stop())
+    }
+
     @Test @MainActor func mcpAndDirectPathsReturnTheSameRevisionBoundResults() async throws {
         let service = ExplorerService(provider: try FixtureProvider.load(), limits: try ExplorerLimits())
         let server = LiveServer(service: service)

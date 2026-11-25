@@ -78,3 +78,7 @@ before investigating the upstream response format or transport.
 ## R1–R3 qualification extension
 
 The original direct and guided tests qualified commit 1f6657c9 on the Mac Studio. The new script additionally runs interactiveLiveResearchCollectsEvidence: explicitly select Via MCP, search/open/read/references, capture the exact section, search one related title through the same route, switch Direct, and verify the retained dossier and both file formats. The additional test normally uses three upstream requests (search, outline, related-title search). The prior proof does not qualify the changed code/schema. All three tests must pass at the new SHA; no automatic retries beyond the existing provider contract.
+
+## R4b and R5
+
+The local live script now runs a fifth independent case, `directReaderReadsHistoricalRevision`. It explicitly previews one returned history row, reads its independently chosen section, verifies the original pin remains unchanged, adopts the exact revision and reloads it without substituting latest. Historical envelope or HTML-profile drift is a failure, not a reason to loosen admission. R5 is separately qualified with `MCPHTTPJourneyTests/knowledgeResourcesPromptsAndSkillOverHTTP` using the offline provider and a real HTTP listener. Previous native receipts do not qualify these changes.

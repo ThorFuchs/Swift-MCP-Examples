@@ -19,3 +19,9 @@ identity. The transport owner remains with the caller.
 - ``MCPResearchClient``
 - ``MCPResearchFailure``
 - <doc:ResearchToolJourney>
+
+## Knowledge as Resources (R5)
+
+- ``ExplorerKnowledge``
+
+The example's full server registers cache-only resource templates, three prompts and a digest-verified static Research Skill using MCPSkills. The original four-tool catalog remains available as a separate factory. No resource read starts an upstream fetch, and no prompt or skill invokes a model.
