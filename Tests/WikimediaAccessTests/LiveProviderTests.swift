@@ -131,6 +131,46 @@ private func html(_ content: String, revision: Int = 22, version: String = "2.8.
         #expect(await transport.count == 3)
     }
 
+
+    @Test func historicalRevisionUsesExactEnvelopeAndDeniesForeignPage() async throws {
+        let pinned = SnapshotID(provider: "mediawiki-rest", project: "enwiki", pageID: "11", revisionID: "22", normalizerVersion: "mediawiki-html-1")
+        let input = HistoricalRevisionInput(pinned: pinned, revisionID: "21")
+        let body = html("<section data-mw-section-id='0'><p>Older article text.</p></section>", revision: 21)
+        func wire(page: Int, revision: Int) throws -> String {
+            let value: [String: Any] = ["id": revision, "timestamp": "2026-10-20T00:00:00Z",
+                "page": ["id": page, "key": "Test", "title": "Test"], "content_model": "wikitext", "html": body]
+            return String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self)
+        }
+        let transport = ReplayTransport([response(try wire(page: 11, revision: 21))])
+        let provider = WikipediaProvider(transport: transport)
+        let service = ExplorerService(provider: provider, limits: try ExplorerLimits())
+        let outline = try await service.historicalOutline(input)
+        #expect(outline.snapshot == input.expectedSnapshot)
+        #expect(outline.provenance.license == HistoricalRevisionLicense.unavailable)
+        let part = try #require(outline.sections.first?.location)
+        let passage = try await service.section(.init(snapshot: outline.snapshot, part: part, maxTextBytes: 4096))
+        #expect(passage.text.contains("Older article text."))
+        #expect(!HistoricalRevisionLicense.permitsCollection(passage.provenance))
+        await #expect(throws: ExplorerProblem.self) {
+            try await service.shareableSection(.init(snapshot: outline.snapshot, part: part, maxTextBytes: 4096))
+        }
+        await #expect(throws: ExplorerProblem.self) {
+            try await service.cachedOutline(outline.snapshot)
+        }
+        let again = try await service.historicalOutline(input)
+        #expect(again.snapshot == outline.snapshot)
+        let urls = await transport.urls
+        #expect(urls == [try WikipediaRoute.revision("21")])
+        for (page, revision) in [(12,21), (11,20)] {
+            let foreign = WikipediaProvider(transport: ReplayTransport([response(try wire(page: page, revision: revision))]))
+            await #expect(throws: ExplorerProblem.self) { try await foreign.historicalRevision(input) }
+        }
+        for bad in ["0", "01", "21/other", "21?x", "9223372036854775808"] {
+            #expect(throws: LiveFailure.self) { try WikipediaRoute.revision(bad) }
+        }
+        #expect(!WikipediaRoute.allowed(URL(string: "https://en.wikipedia.org/w/rest.php/v1/revision/21/with_html?x=1")!))
+    }
+
     @Test func historyRejectsMalformedSegmentsAndRoutes() async throws {
         let id = SnapshotID(provider: "mediawiki-rest", project: "enwiki", pageID: "11", revisionID: "22", normalizerVersion: "mediawiki-html-1")
         for body in [

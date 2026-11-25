@@ -26,10 +26,10 @@ public enum ExplorerTools {
                 try await service.outline($0)
             },
             registration("read_article_section", input: SectionInput.self, responseBytes: responseBytes, observer: observer, profile: service.profile) {
-                try await service.section($0)
+                try await service.shareableSection($0)
             },
             registration("get_section_references", input: ReferencesInput.self, responseBytes: responseBytes, observer: observer, profile: service.profile) {
-                try await service.references($0)
+                try await service.shareableReferences($0)
             },
         ]
         if includeKnowledge { return try ExplorerKnowledge.catalog(tools: tools, service: service, responseBytes: responseBytes) }

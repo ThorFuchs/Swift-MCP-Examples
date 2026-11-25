@@ -24,6 +24,8 @@ import ExplorerMCP
     public private(set) var revisionHistoryProblem: ExplorerProblem?
     public private(set) var loadingRevisionHistory = false
     public private(set) var historicalPreview: HistoricalResearchPreview?
+    private var adoptedHistoricalInput: HistoricalRevisionInput?
+    public var isReadingHistoricalRevision: Bool { adoptedHistoricalInput != nil }
     public var supportsRevisionHistory: Bool { source == .wikipediaEnglish && client is any RevisionHistoryClient }
     /// Present only for the offline demo source.
     public let offlineEdit: OfflineRevisionEdit?
@@ -36,6 +38,7 @@ import ExplorerMCP
         case compare(Candidate, Outline, PartLocation?), publishEdit
         case history(RevisionHistoryInput)
         case historical(HistoricalRevisionInput)
+        case reopenHistorical(HistoricalRevisionInput)
         case historicalSection(pinned: SnapshotID, preview: Outline, part: PartLocation)
     }
     @ObservationIgnored private var pending: (UInt64, Action)?
@@ -111,13 +114,16 @@ import ExplorerMCP
         guard !closed, !isBusy, let preview = historicalPreview?.outline, let outline,
               preview.snapshot.pageID == outline.snapshot.pageID,
               preview.snapshot != outline.snapshot else { return }
+        let input = HistoricalRevisionInput(pinned: outline.snapshot, revisionID: preview.snapshot.revisionID)
+        guard input.isAdmitted, input.expectedSnapshot == preview.snapshot else { return }
         clearRevisionHistory()
+        adoptedHistoricalInput = input
         self.outline = preview; selectedPart = nil; passage = nil; citations = nil
         comparison = nil; problem = nil; referenceProblem = nil; phase = .outline
     }
 
     private func clearRevisionHistory() {
-        revisionHistory = nil; revisionHistoryProblem = nil; loadingRevisionHistory = false; historicalPreview = nil
+        revisionHistory = nil; revisionHistoryProblem = nil; loadingRevisionHistory = false; historicalPreview = nil; adoptedHistoricalInput = nil
     }
 
     /// Explicitly asks the source for the candidate's current revision and, when it differs,
@@ -153,7 +159,12 @@ import ExplorerMCP
         cancel(); clearRevisionHistory(); candidate = nil; outline = nil; passage = nil; citations = nil; selectedPart = nil; comparison = nil
         problem = nil; referenceProblem = nil; phase = page == nil ? .idle : .candidates
     }
-    public func refreshOutline() { if let candidate { open(candidate) } }
+    public func refreshOutline() {
+        if let input = adoptedHistoricalInput {
+            guard !closed, !isBusy, outline?.snapshot == input.expectedSnapshot else { return }
+            enqueue(.reopenHistorical(input), phase: .opening)
+        } else if let candidate { open(candidate) }
+    }
     public func cancel() {
         generation &+= 1; pending = nil; worker?.cancel()
         let wasHistory = loadingRevisionHistory
@@ -239,6 +250,15 @@ import ExplorerMCP
                     await record(operation, false)
                     return
                 }
+            case .reopenHistorical(let input):
+                operation = "open_historical_revision"
+                guard let historicalClient = client as? any RevisionHistoryClient else { throw source.problem(.unsupportedVariant) }
+                let result = try await historicalClient.historicalOutline(input)
+                guard current(token), outline?.snapshot == input.expectedSnapshot else { return }
+                guard result.snapshot == input.expectedSnapshot, result.provenance.identity == result.snapshot,
+                      result.sections.allSatisfy({ $0.location.snapshot == result.snapshot }) else { throw source.problem(.revisionMismatch) }
+                outline = result; selectedPart = nil; passage = nil; citations = nil
+                historicalPreview = nil; comparison = nil; phase = .outline
             case .historical(let input):
                 operation = "open_historical_revision"
                 do {

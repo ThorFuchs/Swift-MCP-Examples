@@ -296,4 +296,48 @@ import ExplorerPresentation
         }
         print("LIVE_WIKI HISTORY PASS joined=true")
     }
+
+    /// R4b: independently resolve one real historical revision and compare
+    /// separately chosen sections before adopting its exact cached identity.
+    @Test func directReaderReadsHistoricalRevision() async throws {
+        try await withLiveApp { app in
+            let reader = try #require(app.research)
+            reader.query = self.query; reader.search(); await reader.waitUntilIdle()
+            let candidate = try #require(reader.page?.candidates.first { $0.title.caseInsensitiveCompare(self.query) == .orderedSame })
+            reader.open(candidate); await reader.waitUntilIdle()
+            let pinned = try #require(reader.outline)
+            let part = try #require(pinned.sections.first?.location)
+            reader.read(part); await reader.waitUntilIdle()
+            let original = try #require(reader.passage)
+            reader.loadRevisionHistory(); await reader.waitUntilIdle()
+            let history = try #require(reader.revisionHistory)
+            let entry = try #require(history.entries.first { $0.revisionID != pinned.snapshot.revisionID })
+            print("LIVE_WIKI historical stage=preview page=\(pinned.snapshot.pageID) pinned=\(pinned.snapshot.revisionID) requested=\(entry.revisionID)")
+            reader.previewHistoricalRevision(entry); await reader.waitUntilIdle()
+            if let problem = reader.revisionHistoryProblem { print("LIVE_WIKI historical problem=\(problem.code.rawValue)") }
+            try #require(reader.revisionHistoryProblem == nil)
+            let preview = try #require(reader.historicalPreview)
+            let expected = HistoricalRevisionInput(pinned: pinned.snapshot, revisionID: entry.revisionID).expectedSnapshot
+            try #require(preview.outline.snapshot == expected)
+            try self.checkOutline(preview.outline, candidatePage: pinned.snapshot.pageID)
+            let olderPart = try #require(preview.outline.sections.first?.location)
+            reader.readHistoricalSection(olderPart); await reader.waitUntilIdle()
+            let older = try #require(reader.historicalPreview?.passage)
+            try self.checkPassage(older, outline: preview.outline, maximumBytes: 8192)
+            try #require(reader.outline?.snapshot == pinned.snapshot && reader.passage?.text == original.text)
+            reader.adoptHistoricalRevision()
+            try #require(reader.outline?.snapshot == expected && reader.selectedPart == nil && reader.isReadingHistoricalRevision)
+            reader.read(olderPart); await reader.waitUntilIdle()
+            try #require(reader.passage?.snapshot == expected)
+            if !HistoricalRevisionLicense.permitsCollection(older.provenance) {
+                try #require(!app.canCollectEvidence)
+            }
+            reader.refreshOutline(); await reader.waitUntilIdle()
+            try #require(reader.outline?.snapshot == expected && reader.problem == nil)
+            let observation = await app.activity.snapshot()
+            try #require(!observation.metricsAvailable && app.server?.phase == .stopped)
+            print("LIVE_WIKI historical verified revision=\(expected.revisionID) text_bytes=\(older.text.utf8.count) shareable=\(HistoricalRevisionLicense.permitsCollection(older.provenance))")
+        }
+        print("LIVE_WIKI HISTORICAL PASS joined=true")
+    }
 }

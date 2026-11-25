@@ -19,7 +19,7 @@ struct ResearchView: View {
                         Text(problem.recovery)
                             .foregroundStyle(.secondary)
                         if model.outline != nil {
-                            Button("Obtain a new outline") { model.refreshOutline() }
+                            Button(model.isReadingHistoricalRevision ? "Reload this exact revision" : "Obtain a new outline") { model.refreshOutline() }
                         } else if !model.query.isEmpty {
                             Button("Try again") { model.search() }
                         }

@@ -33,6 +33,9 @@ which provider, project and normalizer identities are admitted.
 - ``RevisionHistoryInput``
 - ``RevisionHistoryEntry``
 - ``RevisionHistoryPage``
+- ``HistoricalRevisionInput``
+- ``HistoricalRevisionLicense``
+- ``ResearchResourceAddress``
 - ``SectionReferences``
 
 ### Admission and limits

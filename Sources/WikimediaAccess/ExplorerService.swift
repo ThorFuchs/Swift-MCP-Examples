@@ -59,16 +59,36 @@ public actor ExplorerService {
     }
     /// Reads a bounded passage from the exact cached snapshot and part identity.
     public func section(_ input: SectionInput) async throws -> SectionPassage {
+        try await projectSection(input, requireShareableLicense: false)
+    }
+
+    /// Protocol surfaces must not distribute historical text with unknown license.
+    public func shareableSection(_ input: SectionInput) async throws -> SectionPassage {
+        try await projectSection(input, requireShareableLicense: true)
+    }
+
+    private func projectSection(_ input: SectionInput, requireShareableLicense: Bool) async throws -> SectionPassage {
         try identity(input.snapshot, part: input.part)
         let maximum = input.maxTextBytes ?? limits.sectionTextBytes
         guard (1...limits.sectionTextBytes).contains(maximum) else { throw Self.arguments() }
         let snapshot = try await cache.get(input.snapshot, now: clock())
+        if requireShareableLicense && !HistoricalRevisionLicense.permitsCollection(snapshot.provenance) {
+            throw profile.problem(.unsupportedVariant)
+        }
         return try SnapshotProjection.section(snapshot, part: input.part, maximumBytes: maximum)
     }
     /// Reads reference metadata and citation associations from the exact cached snapshot.
     public func references(_ input: ReferencesInput) async throws -> SectionReferences {
         try identity(input.snapshot, part: input.part)
         return try SnapshotProjection.references(await cache.get(input.snapshot, now: clock()), part: input.part)
+    }
+    public func shareableReferences(_ input: ReferencesInput) async throws -> SectionReferences {
+        try identity(input.snapshot, part: input.part)
+        let snapshot = try await cache.get(input.snapshot, now: clock())
+        guard HistoricalRevisionLicense.permitsCollection(snapshot.provenance) else {
+            throw profile.problem(.unsupportedVariant)
+        }
+        return try SnapshotProjection.references(snapshot, part: input.part)
     }
     /// Title-addressed history, independent of the pinned snapshot cache.
     /// Uses the same service admission permit as search and outline.

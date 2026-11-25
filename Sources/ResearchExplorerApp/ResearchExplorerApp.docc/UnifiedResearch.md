@@ -13,3 +13,7 @@ Choose Collect section to retain the displayed text, revision, source license, r
 ## Revision timeline (R4a)
 
 In Direct mode, the Revision panel can explicitly load the latest twenty revision metadata rows and move to an older bounded segment. The reader remains pinned. History is title-addressed; the rows are not admitted historical snapshots. Open a row on Wikipedia using its exact revision permalink. No historical HTML, editor identifiers or comments are retained. Via MCP does not fall through to the direct operation. Native historical rendering and comparison of independently selected historical sections remain future work.
+
+## Historical research and MCP knowledge (R4b/R5)
+
+Preview a real history row in Direct, independently choose a historical section, and optionally adopt that exact revision. Reloading an adopted revision never requests the latest page. A missing historical license is disclosed and blocks Collection and MCP content reads. The Evidence Inspector exposes exact cache-only resource addresses; these are not durable storage. The local SDK server offers two resource templates, three prompts and the evidence-research skill. Neither prompt nor skill runs a model or starts a background job.
