@@ -25,8 +25,9 @@ struct RevisionHistoryView: View {
                     VStack(alignment: .leading, spacing: ExplorerDesign.Space.sm) { controls }
                 }
                 if model.loadingRevisionHistory {
-                    ProgressView("Loading history…").controlSize(.small)
+                    ProgressView("Loading revision data…").controlSize(.small)
                 }
+                if let preview = model.historicalPreview { HistoricalComparisonPanel(model: model, preview: preview) }
                 if let problem = model.revisionHistoryProblem {
                     Label(problem.message, systemImage: "exclamationmark.triangle")
                         .font(ExplorerDesign.Typography.detail)
@@ -43,7 +44,7 @@ struct RevisionHistoryView: View {
                         revisionRow(entry)
                         Divider()
                     }
-                    Text("History is title-addressed. An individual historical revision has not been admitted to this reader. Open it explicitly on Wikipedia; no historical text has been downloaded here.")
+                    Text("History is title-addressed. Preview verifies the selected revision and its page identity independently; the pinned reader remains unchanged.")
                         .font(ExplorerDesign.Typography.detail).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -98,6 +99,10 @@ struct RevisionHistoryView: View {
                 Label("Marked minor by editor", systemImage: "pencil")
                     .font(ExplorerDesign.Typography.detail)
                     .foregroundStyle(.secondary)
+            }
+            if entry.revisionID != outline.snapshot.revisionID {
+                Button("Preview revision", systemImage: "book") { model.previewHistoricalRevision(entry) }
+                    .buttonStyle(.glass).disabled(model.isBusy)
             }
             if let url = entry.permalink {
                 Link("Open revision on Wikipedia", destination: url)

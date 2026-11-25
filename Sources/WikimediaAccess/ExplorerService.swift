@@ -86,6 +86,28 @@ public actor ExplorerService {
         return result
     }
 
+    /// Open a selected exact historical revision, reusing a still-admitted
+    /// cache entry if available. Never resolve the latest article implicitly.
+    public func historicalOutline(_ input: HistoricalRevisionInput) async throws -> Outline {
+        try allowed(input.pinned.project); try Task.checkCancellation()
+        guard profile == .wikipediaEnglish, input.isAdmitted,
+              let historyProvider = provider as? any RevisionHistoryProvider else {
+            throw profile.problem(.unsupportedVariant)
+        }
+        try admit(); defer { inFlight -= 1 }
+        do {
+            return try SnapshotProjection.outline(await cache.get(input.expectedSnapshot, now: clock()))
+        } catch let problem as ExplorerProblem where problem.code == .absentSnapshot {
+            // Explicit historical fetch only. Other errors propagate.
+        }
+        let value = try await historyProvider.historicalRevision(input)
+        try Task.checkCancellation()
+        guard value.provenance.identity == input.expectedSnapshot else { throw Self.providerContract() }
+        let admitted = try LiveSnapshotAdmission.validate(value, limits: limits)
+        try await cache.insert(admitted, now: clock())
+        return try SnapshotProjection.outline(admitted)
+    }
+
     private func identity(_ id: SnapshotID, part: PartLocation) throws {
         try allowed(id.project); try Task.checkCancellation()
         guard id == part.snapshot else {

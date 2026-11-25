@@ -34,6 +34,18 @@ public enum WikipediaRoute {
         return url
     }
 
+    /// Exact revision-addressed REST endpoint; no title, URL or query from the response.
+    public static func revision(_ id: String) throws -> URL {
+        guard RevisionHistoryEntry.isRevisionID(id),
+              let url = URL(string: origin + "/w/rest.php/v1/revision/" + id + "/with_html") else { throw LiveFailure.url }
+        return url
+    }
+
+    static func isRevisionRoute(_ url: URL) -> Bool {
+        guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return false }
+        return c.percentEncodedPath.hasPrefix("/w/rest.php/v1/revision/")
+    }
+
     static func isHistoryRoute(_ url: URL) -> Bool {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return false }
         let path = components.percentEncodedPath
@@ -49,6 +61,11 @@ public enum WikipediaRoute {
             return q.count == 2 && Set(q.map(\.name)) == Set(["q", "limit"])
                 && (q.first(where: { $0.name == "q" })?.value?.utf8.count ?? 0) <= 256
                 && (1...20).contains(Int(q.first(where: { $0.name == "limit" })?.value ?? "") ?? 0)
+        }
+        if isRevisionRoute(url) {
+            let prefix = "/w/rest.php/v1/revision/", suffix = "/with_html"
+            guard c.query == nil, p.hasSuffix(suffix), p.count > prefix.count + suffix.count else { return false }
+            return RevisionHistoryEntry.isRevisionID(String(p.dropFirst(prefix.count).dropLast(suffix.count)))
         }
         let history = isHistoryRoute(url)
         let prefix = "/w/rest.php/v1/page/", suffix = history ? "/history" : "/with_html"
@@ -201,10 +218,10 @@ public actor WikipediaHTTPTransport: LiveTransport {
         // History lacks a page identity in its segment envelope. Keep the
         // exact title/cursor URL; never let a redirect silently retarget it.
         // Adding history to the allowlist must not widen prior operations.
-        let basePolicy = allowedURL, history = WikipediaRoute.isHistoryRoute(url)
+        let basePolicy = allowedURL, exactRoute = WikipediaRoute.isHistoryRoute(url) || WikipediaRoute.isRevisionRoute(url)
         let owner = OwnedWikipediaRequest(deadline: deadline, allowedURL: { target in
             guard basePolicy(target) else { return false }
-            return history ? target.absoluteString == url.absoluteString : !WikipediaRoute.isHistoryRoute(target)
+            return exactRoute ? target.absoluteString == url.absoluteString : !WikipediaRoute.isHistoryRoute(target) && !WikipediaRoute.isRevisionRoute(target)
         })
         let session = URLSession(configuration: configuration, delegate: owner, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }

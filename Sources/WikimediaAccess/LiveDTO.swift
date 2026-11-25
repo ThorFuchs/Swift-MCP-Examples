@@ -32,6 +32,34 @@ struct RESTHistory: Decodable, Sendable {
     let older: String?
 }
 
+/// The documented revision envelope, distinct from RESTPage. Only metadata
+/// required for admission is decoded; no editor identifiers/comments retained.
+struct RESTHistoricalRevision: Decodable, Sendable {
+    struct Page: Decodable, Sendable { let id: Int64; let key, title: String }
+    let id: Int64
+    let timestamp: String
+    let page: Page
+    let contentModel: String
+    let html: String
+    let license: RESTPage.License?
+    enum CodingKeys: String, CodingKey { case id, timestamp, page, contentModel = "content_model", html, license }
+
+    /// Adapt the verified revision envelope to the existing normalizer input.
+    /// The marker is not a claim about the actual historical license.
+    func normalizationInput(for input: HistoricalRevisionInput) throws -> RESTPage {
+        guard input.isAdmitted, String(id) == input.revisionID,
+              String(page.id) == input.pinned.pageID, contentModel == "wikitext",
+              !page.key.isEmpty, page.key.utf8.count <= 1024,
+              !page.title.isEmpty, page.title.utf8.count <= 512,
+              timestamp.utf8.count <= 40, ISO8601DateFormatter().date(from: timestamp) != nil else { throw LiveFailure.identity }
+        _ = try WikipediaRoute.page(page.key)
+        let admittedLicense = license ?? .init(url: HistoricalRevisionLicense.policyURL, title: HistoricalRevisionLicense.missingTitle)
+        guard !admittedLicense.title.isEmpty else { throw LiveFailure.malformed }
+        return RESTPage(id: page.id, key: page.key, title: page.title, latest: .init(id: id, timestamp: timestamp),
+                        contentModel: contentModel, license: admittedLicense, html: html)
+    }
+}
+
 enum RESTCodec {
     static func decode<T: Decodable & Sendable>(_ type: T.Type, _ data: Data) throws -> T {
         guard data.count <= 4_194_304 else { throw LiveFailure.bodyLimit }

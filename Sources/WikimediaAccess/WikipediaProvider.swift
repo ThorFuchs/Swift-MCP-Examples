@@ -96,6 +96,24 @@ public actor WikipediaProvider: ExplorerProvider, RevisionHistoryProvider {
         } catch { throw sanitized(error) }
     }
 
+    /// Resolve one explicitly selected revision; use the same normalizer,
+    /// deadline, bounded transport and content admission as the current page.
+    public func historicalRevision(_ input: HistoricalRevisionInput) async throws -> Snapshot {
+        guard input.isAdmitted else { throw profile.problem(.invalidArguments) }
+        let deadline = try admit(input.pinned.project)
+        defer { inFlight -= 1 }
+        do {
+            let response = try await response(WikipediaRoute.revision(input.revisionID), deadline: deadline)
+            let decoded = try RESTCodec.decode(RESTHistoricalRevision.self, response.body)
+            let page = try decoded.normalizationInput(for: input)
+            let (snapshot, evidence) = try await normalizer.normalize(page, retrievedAt: now(), limits: ExplorerLimits())
+            guard snapshot.provenance.identity == input.expectedSnapshot else { throw LiveFailure.identity }
+            try finish(deadline)
+            lastRender = evidence
+            return snapshot
+        } catch { throw sanitized(error) }
+    }
+
     private func response(_ url: URL, deadline: ContinuousClock.Instant) async throws -> LiveHTTPResponse {
         for attempt in 0..<2 {
             try finish(deadline)

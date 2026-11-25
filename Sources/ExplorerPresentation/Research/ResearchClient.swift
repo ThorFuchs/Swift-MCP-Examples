@@ -14,6 +14,7 @@ public protocol ResearchClient: Sendable {
 /// an MCP reader never falls through to a direct network request.
 public protocol RevisionHistoryClient: ResearchClient {
     func history(_ input: RevisionHistoryInput) async throws -> RevisionHistoryPage
+    func historicalOutline(_ input: HistoricalRevisionInput) async throws -> Outline
 }
 extension ExplorerService: RevisionHistoryClient {}
 /// The same research operations over a real MCP connection (HTTP or stdio).
@@ -64,4 +65,14 @@ public struct RevisionComparison: Sendable {
     public let partID: String?
     public let passage: Passage
     public var latestIsPinned: Bool { latest.snapshot == pinned }
+}
+
+/// One separately selected historical snapshot and optional excerpt. The main
+/// reader remains pinned until the user explicitly adopts this outline.
+public struct HistoricalResearchPreview: Sendable {
+    public let outline: Outline
+    public let passage: SectionPassage?
+    public init(outline: Outline, passage: SectionPassage? = nil) {
+        self.outline = outline; self.passage = passage
+    }
 }

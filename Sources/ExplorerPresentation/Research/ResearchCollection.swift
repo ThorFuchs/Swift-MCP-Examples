@@ -177,7 +177,7 @@ public struct ResearchCollection: Sendable {
     private static func admitted(_ p: Provenance) -> Bool {
         let id = p.identity
         let profile: SourceProfile = p.synthetic ? .offlineDemo : .wikipediaEnglish
-        guard profile.admits(id), p.title.utf8.count <= 512,
+        guard HistoricalRevisionLicense.permitsCollection(p), profile.admits(id), p.title.utf8.count <= 512,
               !p.license.isEmpty, p.license.utf8.count <= 2048,
               p.sourceURL.utf8.count <= 2048, p.retrievedAt.utf8.count <= 128,
               (p.modifiedAt?.utf8.count ?? 0) <= 128, (p.language?.utf8.count ?? 0) <= 128 else { return false }

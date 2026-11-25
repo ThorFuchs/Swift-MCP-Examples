@@ -48,6 +48,7 @@ struct PreparedSource: Sendable {
     var canCollectEvidence: Bool {
         canChangeResearchMode && researchRouteReady && research?.phase == .section
             && research?.passage?.textAvailable == true && research?.passage?.text.isEmpty == false
+            && (research?.passage.map { HistoricalRevisionLicense.permitsCollection($0.provenance) } ?? false)
     }
     var canChangeResearchMode: Bool { !isQuitting && !termination.unsettled && bootstrap == nil && service != nil }
     var canUseMCPResearch: Bool { canChangeResearchMode && server?.phase == .running && server?.endpoint != nil && server?.runID != nil }

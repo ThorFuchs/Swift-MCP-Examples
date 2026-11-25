@@ -23,6 +23,7 @@ import ExplorerMCP
     public private(set) var revisionHistory: RevisionHistoryPage?
     public private(set) var revisionHistoryProblem: ExplorerProblem?
     public private(set) var loadingRevisionHistory = false
+    public private(set) var historicalPreview: HistoricalResearchPreview?
     public var supportsRevisionHistory: Bool { source == .wikipediaEnglish && client is any RevisionHistoryClient }
     /// Present only for the offline demo source.
     public let offlineEdit: OfflineRevisionEdit?
@@ -34,6 +35,8 @@ import ExplorerMCP
         case search(String), open(Candidate), read(Outline, PartLocation), tour
         case compare(Candidate, Outline, PartLocation?), publishEdit
         case history(RevisionHistoryInput)
+        case historical(HistoricalRevisionInput)
+        case historicalSection(pinned: SnapshotID, preview: Outline, part: PartLocation)
     }
     @ObservationIgnored private var pending: (UInt64, Action)?
     @ObservationIgnored private var generation: UInt64 = 0
@@ -80,8 +83,41 @@ import ExplorerMCP
         enqueue(.history(.init(candidateID: candidate.id, snapshot: outline.snapshot, olderThan: cursor)), phase: .comparing, preserveResearchProblems: true)
     }
 
+    /// Load only a row returned in the currently displayed history segment.
+    public func previewHistoricalRevision(_ entry: RevisionHistoryEntry) {
+        guard !closed, !isBusy, supportsRevisionHistory, let outline,
+              let history = revisionHistory, history.requestedSnapshot == outline.snapshot,
+              history.entries.contains(entry) else { return }
+        let input = HistoricalRevisionInput(pinned: outline.snapshot, revisionID: entry.revisionID)
+        guard input.isAdmitted else { return }
+        historicalPreview = nil; revisionHistoryProblem = nil
+        enqueue(.historical(input), phase: .comparing, preserveResearchProblems: true)
+    }
+
+    /// Select a section of the historical outline independently of the pinned
+    /// reader. Ordinal part IDs never imply cross-revision correspondence.
+    public func readHistoricalSection(_ part: PartLocation) {
+        guard !closed, !isBusy, let outline, let preview = historicalPreview?.outline,
+              preview.sections.contains(where: { $0.location == part }) else { return }
+        historicalPreview = .init(outline: preview)
+        revisionHistoryProblem = nil
+        enqueue(.historicalSection(pinned: outline.snapshot, preview: preview, part: part),
+                phase: .comparing, preserveResearchProblems: true)
+    }
+
+    /// Explicitly adopt the verified historical outline in the ordinary reader.
+    /// No current revision is silently substituted and no section is mapped.
+    public func adoptHistoricalRevision() {
+        guard !closed, !isBusy, let preview = historicalPreview?.outline, let outline,
+              preview.snapshot.pageID == outline.snapshot.pageID,
+              preview.snapshot != outline.snapshot else { return }
+        clearRevisionHistory()
+        self.outline = preview; selectedPart = nil; passage = nil; citations = nil
+        comparison = nil; problem = nil; referenceProblem = nil; phase = .outline
+    }
+
     private func clearRevisionHistory() {
-        revisionHistory = nil; revisionHistoryProblem = nil; loadingRevisionHistory = false
+        revisionHistory = nil; revisionHistoryProblem = nil; loadingRevisionHistory = false; historicalPreview = nil
     }
 
     /// Explicitly asks the source for the candidate's current revision and, when it differs,
@@ -133,7 +169,10 @@ import ExplorerMCP
     private func enqueue(_ action: Action, phase: ResearchPhase, preserveResearchProblems: Bool = false) {
         guard !closed else { return }
         generation &+= 1; pending = (generation, action); worker?.cancel()
-        if case .history = action { loadingRevisionHistory = true } else { loadingRevisionHistory = false }
+        switch action {
+        case .history, .historical, .historicalSection: loadingRevisionHistory = true
+        default: loadingRevisionHistory = false
+        }
         if !preserveResearchProblems { problem = nil; referenceProblem = nil }
         self.phase = phase
         guard driver == nil else { return }
@@ -199,6 +238,42 @@ import ExplorerMCP
                     loadingRevisionHistory = false; phase = restingPhase()
                     await record(operation, false)
                     return
+                }
+            case .historical(let input):
+                operation = "open_historical_revision"
+                do {
+                    guard let historicalClient = client as? any RevisionHistoryClient else { throw source.problem(.unsupportedVariant) }
+                    let result = try await historicalClient.historicalOutline(input)
+                    guard current(token), outline?.snapshot == input.pinned else { return }
+                    guard result.snapshot == input.expectedSnapshot, result.provenance.identity == result.snapshot,
+                          result.sections.allSatisfy({ $0.location.snapshot == result.snapshot }) else {
+                        throw source.problem(.revisionMismatch)
+                    }
+                    historicalPreview = .init(outline: result)
+                    loadingRevisionHistory = false; phase = restingPhase()
+                } catch is CancellationError { throw CancellationError() }
+                catch {
+                    guard current(token) else { return }
+                    revisionHistoryProblem = publicProblem(error)
+                    loadingRevisionHistory = false; phase = restingPhase()
+                    await record(operation, false); return
+                }
+            case .historicalSection(let pinned, let preview, let part):
+                operation = "read_historical_section"
+                do {
+                    let result = try await client.section(.init(snapshot: preview.snapshot, part: part, maxTextBytes: 8192))
+                    guard current(token), outline?.snapshot == pinned,
+                          historicalPreview?.outline.snapshot == preview.snapshot else { return }
+                    guard result.snapshot == preview.snapshot, result.provenance.identity == preview.snapshot,
+                          result.selectedPartID == part.partID else { throw source.problem(.revisionMismatch) }
+                    historicalPreview = .init(outline: preview, passage: result)
+                    loadingRevisionHistory = false; phase = restingPhase()
+                } catch is CancellationError { throw CancellationError() }
+                catch {
+                    guard current(token) else { return }
+                    revisionHistoryProblem = publicProblem(error)
+                    loadingRevisionHistory = false; phase = restingPhase()
+                    await record(operation, false); return
                 }
             case .compare(let candidate, let pinned, let part):
                 operation = "get_article_outline"
