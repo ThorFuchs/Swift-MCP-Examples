@@ -16,9 +16,9 @@ public enum ExplorerTools {
     /// Fixed tool catalogue shared by the research server and client.
     public static let names = ["search_articles", "get_article_outline", "read_article_section", "get_section_references"]
     /// Builds the four-tool catalogue for the given research service and optional observation adapter.
-    public static func catalog(service: ExplorerService, responseBytes: Int = 131_072, observer: (any ExplorerToolObserver)? = nil) throws -> ServerCatalog {
+    public static func catalog(service: ExplorerService, responseBytes: Int = 131_072, observer: (any ExplorerToolObserver)? = nil, includeKnowledge: Bool = false) throws -> ServerCatalog {
         guard (4096...131_072).contains(responseBytes) else { throw CoreFailure.invalidPolicy }
-        return try ServerCatalog(tools: [
+        let tools = try [
             registration("search_articles", input: SearchInput.self, responseBytes: responseBytes, observer: observer, profile: service.profile) {
                 try await service.search($0)
             },
@@ -31,7 +31,9 @@ public enum ExplorerTools {
             registration("get_section_references", input: ReferencesInput.self, responseBytes: responseBytes, observer: observer, profile: service.profile) {
                 try await service.references($0)
             },
-        ])
+        ]
+        if includeKnowledge { return try ExplorerKnowledge.catalog(tools: tools, service: service, responseBytes: responseBytes) }
+        return try ServerCatalog(tools: tools)
     }
     /// Host-supplied key material is ONLY for SDK catalog cursors. Application
     /// section continuation is unsupported. No transport or credential is owned.
@@ -41,11 +43,11 @@ public enum ExplorerTools {
         let cursors = try CursorProtector(keys: [key], active: ScalarText("wre"), clock: clock)
         let info = try WireCodec.parse(Array(#"{"name":"research-explorer","version":"0.1.0-source"}"#.utf8), limits: .balanced).result
         let configuration = try ServerConfiguration(activeRequests: 4, queuedRequests: 4, requestsPerPrincipal: 2,
-            terminalWork: 524_288, messageBytes: 65_536, resultBytes: 131_072, catalogEntries: 4, pageEntries: 4,
+            terminalWork: 524_288, messageBytes: 65_536, resultBytes: 131_072, catalogEntries: 10, pageEntries: 4,
             deadlineMilliseconds: 15_000, bufferedBytes: 71_303_168,
             // Keep catalog preparation finite and cumulative, using the SDK fixture's host policy.
             preparation: ServerPreparationPolicy(work: 512_000_000, compilation: 256_000_000, evaluation: 128_000_000))
-        return try await Server.make(info: info, catalog: catalog(service: service, responseBytes: responseBytes, observer: observer), cursors: cursors, configuration: configuration)
+        return try await Server.make(info: info, catalog: catalog(service: service, responseBytes: responseBytes, observer: observer, includeKnowledge: true), cursors: cursors, configuration: configuration)
     }
     private static func definition(_ name: String, profile: SourceProfile) throws -> JSON {
         guard names.contains(name), let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: profile == .offlineDemo ? "Contracts" : "Contracts/Live-v1") else { throw CoreFailure.invalidInput }

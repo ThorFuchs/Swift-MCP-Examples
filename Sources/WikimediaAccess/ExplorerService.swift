@@ -108,6 +108,29 @@ public actor ExplorerService {
         return try SnapshotProjection.outline(admitted)
     }
 
+    /// Resource reads project only the exact already-admitted cache entry.
+    /// They cannot resolve a candidate or fetch/revalidate a remote revision.
+    public func cachedOutline(_ id: SnapshotID) async throws -> Outline {
+        try allowed(id.project); try Task.checkCancellation()
+        guard profile.admits(id) else { throw Self.arguments() }
+        let snapshot = try await cache.get(id, now: clock())
+        guard HistoricalRevisionLicense.permitsCollection(snapshot.provenance) else {
+            throw profile.problem(.unsupportedVariant)
+        }
+        return try SnapshotProjection.outline(snapshot)
+    }
+
+    public func cachedResourceSection(_ input: SectionInput) async throws -> SectionPassage {
+        try identity(input.snapshot, part: input.part)
+        let maximum = input.maxTextBytes ?? 4096
+        guard (1...min(4096, limits.sectionTextBytes)).contains(maximum) else { throw Self.arguments() }
+        let snapshot = try await cache.get(input.snapshot, now: clock())
+        guard HistoricalRevisionLicense.permitsCollection(snapshot.provenance) else {
+            throw profile.problem(.unsupportedVariant)
+        }
+        return try SnapshotProjection.section(snapshot, part: input.part, maximumBytes: maximum)
+    }
+
     private func identity(_ id: SnapshotID, part: PartLocation) throws {
         try allowed(id.project); try Task.checkCancellation()
         guard id == part.snapshot else {

@@ -221,6 +221,23 @@ struct EvidencePane: View {
                         .font(.caption)
                 }
             }
+            if let outline = model.outline,
+               HistoricalRevisionLicense.permitsCollection(outline.provenance) {
+                Section {
+                    if let address = ResearchResourceAddress(snapshot: outline.snapshot, kind: .outline) {
+                        resourceAddress("Article outline", address)
+                    }
+                    if let part = model.selectedPart,
+                       let address = ResearchResourceAddress(snapshot: part.snapshot, kind: .section(part.partID)) {
+                        resourceAddress("Selected section", address)
+                    }
+                } header: {
+                    Text("MCP Resources")
+                } footer: {
+                    Text("Exact cache-only addresses. Start the local server explicitly to read them through MCP. An address is not a guarantee of retention; expired resources are unavailable.")
+                        .font(.caption)
+                }
+            }
             Section("Provenance") {
                 ForEach(presentation.provenance) { line in
                     LabeledContent(line.label) { Text(line.value).textSelection(.enabled).multilineTextAlignment(.trailing) }
@@ -238,6 +255,15 @@ struct EvidencePane: View {
         .formStyle(.grouped)
         .background(ExplorerDesign.Palette.canvas)
     }
+    private func resourceAddress(_ title: String, _ address: ResearchResourceAddress) -> some View {
+        VStack(alignment: .leading, spacing: ExplorerDesign.Space.xs) {
+            Text(title).font(ExplorerDesign.Typography.detail)
+            Text(address.uri).font(ExplorerDesign.Typography.mono)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     @ViewBuilder private var references: some View {
         switch presentation.evidence {
         case .noSection: Text("Choose a section to see what it cites.").foregroundStyle(.secondary)
